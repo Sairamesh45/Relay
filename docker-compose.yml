@@ -1,41 +1,75 @@
 version: "3.8"
 
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: unified-ai-gateway-backend
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=development
-      - DEBUG=true
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/unified_ai_gateway
-    volumes:
-      - ./backend:/app
-    depends_on:
-      db:
-        condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
   db:
     image: postgres:16-alpine
-    container_name: unified-ai-gateway-db
-    restart: always
+    container_name: gateway-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: unified_ai_gateway
+      POSTGRES_DB: ${POSTGRES_DB:-gateway_db}
+      POSTGRES_USER: ${POSTGRES_USER:-gateway_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d unified_ai_gateway"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gateway_user} -d ${POSTGRES_DB:-gateway_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - gateway-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: gateway-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gateway-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gateway-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - APP_NAME=${APP_NAME:-Unified AI Gateway}
+      - APP_ENV=${APP_ENV:-development}
+      - DEBUG=${DEBUG:-true}
+      - API_V1_PREFIX=${API_V1_PREFIX:-/api/v1}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-gateway_user}:${POSTGRES_PASSWORD:-change_this_password}@db:5432/${POSTGRES_DB:-gateway_db}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - gateway-network
 
 volumes:
   postgres_data:
+  redis_data:
+
+networks:
+  gateway-network:
+    driver: bridge

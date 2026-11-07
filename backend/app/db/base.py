@@ -2,5 +2,10 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy declarative models."""
+    """Declarative Base for all future database models.
+
+    Future models (User, ProviderAccount, ProviderCredential, ModelRegistry,
+    VirtualAPIKey, UsageRecord, RoutingPolicy) will inherit from this class.
+    """
+
     pass

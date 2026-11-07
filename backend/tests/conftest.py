@@ -8,7 +8,7 @@ from app.main import app
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """Async test client for testing FastAPI endpoints."""
+    """Provide an asynchronous HTTP client for end-to-end endpoint testing."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
