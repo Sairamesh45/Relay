@@ -24,7 +24,7 @@ class HealthService:
         """Verify PostgreSQL connectivity by executing a lightweight SELECT 1 query."""
         try:
             engine = get_engine()
-            async with asyncio.timeout(3.0):
+            async with asyncio.timeout(6.0):
                 async with engine.connect() as conn:
                     await conn.execute(text("SELECT 1"))
             return True
@@ -35,7 +35,7 @@ class HealthService:
     async def check_redis(self) -> bool:
         """Verify Redis connectivity via ping."""
         try:
-            async with asyncio.timeout(3.0):
+            async with asyncio.timeout(4.0):
                 return await redis_manager.ping()
         except Exception as e:
             logger.warning("Redis health check failed: %s", type(e).__name__)

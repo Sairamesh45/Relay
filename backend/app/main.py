@@ -1,11 +1,14 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import api_router
+from app.api.routes.gateway import gateway_router
 from app.core.config import get_settings
+from app.core.gateway_errors import OpenAIHTTPException
 from app.core.logging import logger, setup_logging
 from app.db.session import close_db_engine, redis_manager
 
@@ -49,8 +52,20 @@ def create_application() -> FastAPI:
             allow_headers=["*"],
         )
 
+    @app.exception_handler(OpenAIHTTPException)
+    async def openai_http_exception_handler(
+        request: Request, exc: OpenAIHTTPException
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.detail,
+            headers=exc.headers,
+        )
+
     # Register API routes with configured version prefix
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    # Register OpenAI-compatible gateway routes under /v1
+    app.include_router(gateway_router, prefix="/v1", tags=["OpenAI Gateway"])
 
     return app
 
