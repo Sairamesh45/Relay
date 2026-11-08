@@ -18,8 +18,8 @@ export class ApiError extends Error {
 }
 
 let authToken: string | null = null;
-let devUserId = 'dev-admin';
-let devUserEmail = 'admin@gateway.local';
+let devUserId = '00000000-0000-0000-0000-000000000001';
+let devUserEmail = 'developer@gateway.local';
 
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;

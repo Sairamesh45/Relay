@@ -91,12 +91,34 @@ export const Auth: React.FC = () => {
         )}
 
         <div className="flex flex-col gap-3 w-full">
+          {/* Dev Mode Primary Fast-Pass */}
+          {isDevMode && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleDevSignIn}
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 bg-violet text-white font-medium text-[14px] rounded-pill py-3 px-5 hover:bg-violet-dark transition-all cursor-pointer w-full shadow-md disabled:opacity-50"
+              >
+                <span>{isSubmitting ? 'Signing in…' : 'Continue with Developer Identity'}</span>
+              </button>
+              <div className="text-center text-[12px] text-mute">
+                Instant access for local development &bull; No Google setup required
+              </div>
+              <div className="flex items-center gap-2 my-2 text-mute text-xs">
+                <hr className="flex-1 border-line" />
+                <span>or use Google OAuth</span>
+                <hr className="flex-1 border-line" />
+              </div>
+            </div>
+          )}
+
           {/* Native Google OAuth Button */}
           <div className="flex justify-center w-full min-h-[44px]">
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => {
-                setErrorMessage('Google Sign-In failed or was cancelled.');
+                setErrorMessage('Google Sign-In failed: The OAuth Client ID in your .env is invalid or not registered in Google Cloud Console. Click "Continue with Developer Identity" above to proceed without Google.');
               }}
               shape="pill"
               size="large"
@@ -104,18 +126,6 @@ export const Auth: React.FC = () => {
               text="continue_with"
             />
           </div>
-
-          {/* Dev Mode Fallback Button */}
-          {isDevMode && (
-            <button
-              type="button"
-              onClick={handleDevSignIn}
-              disabled={isSubmitting}
-              className="inline-flex items-center justify-center gap-2 bg-ink/5 border border-line text-ink rounded-pill py-2.5 px-4 font-medium text-[13px] hover:bg-ink/10 transition-colors cursor-pointer w-full disabled:opacity-50"
-            >
-              <span>{isSubmitting ? 'Signing in…' : 'Continue with Developer Identity'}</span>
-            </button>
-          )}
         </div>
 
         {isDevMode && (

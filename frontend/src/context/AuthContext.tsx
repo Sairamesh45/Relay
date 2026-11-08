@@ -15,8 +15,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEV_DEFAULT_USER: User = {
-  id: 'dev-admin',
-  email: 'admin@gateway.local',
+  id: '00000000-0000-0000-0000-000000000001',
+  email: 'developer@gateway.local',
   fullName: 'Developer Admin',
 };
 
@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const u: User = {
           id: res.user.id,
           email: res.user.email || '',
-          fullName: res.user.full_name,
+          fullName: res.user.full_name || 'Developer Admin',
           avatarUrl: res.user.avatar_url,
         };
         setUser(u);
