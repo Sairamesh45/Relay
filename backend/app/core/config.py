@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: str | None = None
     SUPABASE_SECRET_KEY: str | None = None
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
+    SUPABASE_JWT_SECRET: str | None = None
+
+    # Google OAuth & Relay Native JWT Configuration
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    JWT_SECRET_KEY: str = (
+        "relay_dev_jwt_secret_key_change_in_production_32b_min"
+    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    AUTH_COOKIE_SECURE: bool = False
+    AUTH_COOKIE_SAMESITE: str = "lax"
+    AUTH_COOKIE_DOMAIN: str | None = None
 
     # Provider & Credential Configuration
     CREDENTIAL_ENCRYPTION_KEY: str | None = None

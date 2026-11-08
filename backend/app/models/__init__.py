@@ -6,6 +6,19 @@ from app.models.model_sync_log import ModelSyncLog
 from app.models.provider_credential import ProviderCredential
 from app.models.provider_model import ProviderModel
 from app.models.rate_limit import RateLimitBucket
+from app.models.refresh_token import RefreshToken
+from app.models.reliability import (
+    CircuitBreakerState,
+    CircuitState,
+    CredentialHealth,
+    HealthStatus,
+    QuotaConfidence,
+    QuotaResourceType,
+    QuotaScope,
+    QuotaState,
+    ReliabilityEvent,
+    ReliabilityEventType,
+)
 from app.models.routing_decision_log import RoutingDecisionLog
 from app.models.routing_policy import VirtualKeyRoutingPolicy
 from app.models.routing_state import CredentialPoolState
@@ -23,7 +36,18 @@ __all__ = [
     "VirtualAPIKey",
     "GatewayRequestLog",
     "RateLimitBucket",
+    "RefreshToken",
     "VirtualKeyRoutingPolicy",
     "CredentialPoolState",
     "RoutingDecisionLog",
+    "CredentialHealth",
+    "HealthStatus",
+    "QuotaState",
+    "QuotaScope",
+    "QuotaResourceType",
+    "QuotaConfidence",
+    "CircuitBreakerState",
+    "CircuitState",
+    "ReliabilityEvent",
+    "ReliabilityEventType",
 ]

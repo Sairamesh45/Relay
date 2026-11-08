@@ -13,6 +13,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.gateway_request_log import GatewayRequestLog
     from app.models.provider_credential import ProviderCredential
+    from app.models.refresh_token import RefreshToken
     from app.models.virtual_api_key import VirtualAPIKey
 
 
@@ -52,6 +53,15 @@ class User(Base):
         index=True,
     )
 
+    full_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(1024),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -76,6 +86,11 @@ class User(Base):
     )
     gateway_request_logs: Mapped[list["GatewayRequestLog"]] = relationship(
         "GatewayRequestLog",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        "RefreshToken",
         back_populates="user",
         cascade="all, delete-orphan",
     )

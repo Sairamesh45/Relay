@@ -64,6 +64,10 @@ def create_application() -> FastAPI:
 
     # Register API routes with configured version prefix
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    # Register direct /api/auth routes
+    from app.api.routes.auth import router as auth_router
+
+    app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
     # Register OpenAI-compatible gateway routes under /v1
     app.include_router(gateway_router, prefix="/v1", tags=["OpenAI Gateway"])
 

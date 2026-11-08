@@ -22,6 +22,11 @@ from app.schemas.chat import (
     ChatMessage,
 )
 from app.services.chat_gateway import ChatGatewayService
+from app.services.routing.engine import (
+    CandidateDiscoveryContext,
+    get_routing_engine,
+)
+from app.services.routing.scoring import ScoredCandidate
 from app.services.virtual_key_service import VirtualKeyService
 
 
@@ -236,3 +241,174 @@ async def test_gateway_no_eligible_candidates_returns_404(
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"]["code"] == "model_not_found"
+
+
+@pytest.mark.asyncio
+async def test_get_ranked_candidates_side_effect_free(
+    db_session: AsyncSession,
+) -> None:
+    """Verify get_ranked_candidates returns scored candidates without creating decision logs or mutating state."""
+    user = User(id=uuid.uuid4(), email=f"sideeffect_{uuid.uuid4().hex[:8]}@example.com")
+    db_session.add(user)
+    await db_session.flush()
+
+    key_record, _ = await VirtualKeyService().create_key(db_session, user, "SE Key")
+
+    cred = ProviderCredential(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        provider="groq",
+        encrypted_api_key=encrypt_api_key("gsk-test-se"),
+        key_version=1,
+        credential_fingerprint=generate_credential_fingerprint("gsk-test-se"),
+        status="active",
+    )
+    db_session.add(cred)
+    await db_session.flush()
+
+    um = UnifiedModel(canonical_id=f"test/se-model-{uuid.uuid4().hex[:8]}")
+    db_session.add(um)
+    await db_session.flush()
+
+    pm = ProviderModel(
+        unified_model_id=um.id,
+        provider="groq",
+        provider_model_id="llama-3.3-70b-versatile",
+        credential_id=cred.id,
+        availability_status="available",
+        supports_tools=True,
+        supports_streaming=True,
+    )
+    db_session.add(pm)
+    await db_session.commit()
+
+    engine = get_routing_engine()
+    policy = await engine.get_or_create_policy(db_session, key_record, user)
+
+    chat_req = ChatCompletionRequest(
+        model="auto",
+        messages=[ChatMessage(role="user", content="Ranked candidates test")],
+    )
+    ctx = CandidateDiscoveryContext.from_request(
+        user=user,
+        key=key_record,
+        policy=policy,
+        request=chat_req,
+    )
+
+    ranked_candidates = await engine.get_ranked_candidates(db_session, ctx)
+
+    assert len(ranked_candidates) == 1
+    assert isinstance(ranked_candidates[0], ScoredCandidate)
+    assert ranked_candidates[0].candidate.provider == "groq"
+    assert ranked_candidates[0].candidate.provider_model_id == "llama-3.3-70b-versatile"
+    assert ranked_candidates[0].score_breakdown.final_score > 0
+
+    # Verify no RoutingDecisionLog was written (side-effect free)
+    stmt = select(RoutingDecisionLog).where(
+        RoutingDecisionLog.virtual_api_key_id == key_record.id
+    )
+    logs = (await db_session.execute(stmt)).scalars().all()
+    assert len(logs) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_ranked_candidates_empty_pool_returns_empty_list(
+    db_session: AsyncSession,
+) -> None:
+    """Verify get_ranked_candidates returns [] rather than raising 404 when no candidates match."""
+    user = User(id=uuid.uuid4(), email=f"empty_pool_{uuid.uuid4().hex[:8]}@example.com")
+    db_session.add(user)
+    await db_session.flush()
+
+    key_record, _ = await VirtualKeyService().create_key(
+        db_session, user, "Empty Pool Key"
+    )
+    engine = get_routing_engine()
+    policy = await engine.get_or_create_policy(db_session, key_record, user)
+
+    chat_req = ChatCompletionRequest(
+        model="auto",
+        messages=[ChatMessage(role="user", content="No models")],
+    )
+    ctx = CandidateDiscoveryContext.from_request(
+        user=user,
+        key=key_record,
+        policy=policy,
+        request=chat_req,
+    )
+
+    ranked_candidates = await engine.get_ranked_candidates(db_session, ctx)
+    assert ranked_candidates == []
+
+
+@pytest.mark.asyncio
+async def test_get_ranked_candidates_ranks_multiple_candidates(
+    db_session: AsyncSession,
+) -> None:
+    """Verify get_ranked_candidates ranks multiple candidates deterministically in descending score order."""
+    user = User(id=uuid.uuid4(), email=f"multi_cand_{uuid.uuid4().hex[:8]}@example.com")
+    db_session.add(user)
+    await db_session.flush()
+
+    key_record, _ = await VirtualKeyService().create_key(db_session, user, "Multi Key")
+
+    cred = ProviderCredential(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        provider="groq",
+        encrypted_api_key=encrypt_api_key("gsk-test-multi"),
+        key_version=1,
+        credential_fingerprint=generate_credential_fingerprint("gsk-test-multi"),
+        status="active",
+    )
+    db_session.add(cred)
+    await db_session.flush()
+
+    um1 = UnifiedModel(canonical_id=f"test/model1-{uuid.uuid4().hex[:8]}")
+    um2 = UnifiedModel(canonical_id=f"test/model2-{uuid.uuid4().hex[:8]}")
+    db_session.add_all([um1, um2])
+    await db_session.flush()
+
+    pm1 = ProviderModel(
+        unified_model_id=um1.id,
+        provider="groq",
+        provider_model_id="llama-3.1-8b-instant",
+        credential_id=cred.id,
+        availability_status="available",
+        input_price_per_million=0.05,
+        output_price_per_million=0.08,
+    )
+    pm2 = ProviderModel(
+        unified_model_id=um2.id,
+        provider="groq",
+        provider_model_id="llama-3.3-70b-versatile",
+        credential_id=cred.id,
+        availability_status="available",
+        input_price_per_million=0.59,
+        output_price_per_million=0.79,
+    )
+    db_session.add_all([pm1, pm2])
+    await db_session.commit()
+
+    engine = get_routing_engine()
+    policy = await engine.get_or_create_policy(db_session, key_record, user)
+
+    chat_req = ChatCompletionRequest(
+        model="cheap",  # cost-optimized preset emphasizes lower pricing
+        messages=[ChatMessage(role="user", content="Rank candidates test")],
+    )
+    ctx = CandidateDiscoveryContext.from_request(
+        user=user,
+        key=key_record,
+        policy=policy,
+        request=chat_req,
+    )
+
+    ranked = await engine.get_ranked_candidates(db_session, ctx)
+    assert len(ranked) == 2
+    # The cheaper model (llama-3.1-8b-instant) should rank higher on cost-optimized
+    assert (
+        ranked[0].score_breakdown.final_score >= ranked[1].score_breakdown.final_score
+    )
+    assert ranked[0].candidate.provider_model_id == "llama-3.1-8b-instant"

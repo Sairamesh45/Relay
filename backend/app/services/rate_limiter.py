@@ -35,23 +35,24 @@ class RateLimiterService:
         limit = custom_limit or self.default_rpm
         now = datetime.now(UTC)
 
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        # Ensure bucket exists atomically with ON CONFLICT DO NOTHING
+        init_stmt = (
+            pg_insert(RateLimitBucket)
+            .values(key_id=key_id, window_start=now, request_count=0)
+            .on_conflict_do_nothing(index_elements=["key_id"])
+        )
+        await db.execute(init_stmt)
+        await db.flush()
+
         stmt = (
             select(RateLimitBucket)
             .where(RateLimitBucket.key_id == key_id)
             .with_for_update()
         )
         res = await db.execute(stmt)
-        bucket = res.scalar_one_or_none()
-
-        if bucket is None:
-            bucket = RateLimitBucket(
-                key_id=key_id,
-                window_start=now,
-                request_count=1,
-            )
-            db.add(bucket)
-            await db.flush()
-            return
+        bucket = res.scalar_one()
 
         elapsed = (now - bucket.window_start).total_seconds()
 

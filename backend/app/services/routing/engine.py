@@ -34,8 +34,11 @@ from app.services.routing.metrics import (
 from app.services.routing.scoring import (
     ModelScorer,
     ScoreBreakdown,
+    ScoredCandidate,
     get_model_scorer,
 )
+
+CandidateDiscoveryContext = RoutingContext
 
 
 @dataclass
@@ -106,6 +109,37 @@ class RoutingEngine:
             await db.refresh(policy)
 
         return policy
+
+    async def get_ranked_candidates(
+        self,
+        db: AsyncSession,
+        ctx: CandidateDiscoveryContext,
+    ) -> list[ScoredCandidate]:
+        """Discovers eligible candidates, scores them, and returns full ranked list without side effects."""
+        discovery = await self.discovery_service.discover_candidates(db, ctx)
+        if not discovery.eligible:
+            return []
+
+        metrics_map = await self.metrics_service.get_metrics_for_candidates(
+            db, ctx.user.id
+        )
+
+        policy = ctx.policy
+        if policy is None:
+            policy = await self.get_or_create_policy(db, ctx.key, ctx.user)
+
+        weights = self.scorer.resolve_effective_weights(
+            routing_mode=policy.routing_mode,
+            routing_preset=policy.routing_preset,
+            quality_weight=policy.quality_weight,
+            speed_weight=policy.speed_weight,
+            availability_weight=policy.availability_weight,
+            cost_weight=policy.cost_weight,
+            alias_override=ctx.alias if not ctx.is_explicit else None,
+        )
+
+        ranked = self.scorer.rank_candidates(discovery.eligible, metrics_map, weights)
+        return ranked
 
     async def route(
         self,
