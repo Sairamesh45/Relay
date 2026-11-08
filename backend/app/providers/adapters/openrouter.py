@@ -169,6 +169,15 @@ class OpenRouterProvider(BaseProvider):
             if not isinstance(raw_model, dict):
                 continue
             normalized = self._normalize_model(raw_model)
+
+            # Platform policy: only support free-tier models (zero credit balance required)
+            is_free = (
+                (normalized.pricing and normalized.pricing.get("is_free", False))
+                or normalized.id.endswith(":free")
+            )
+            if not is_free:
+                continue
+
             if normalized.id not in seen_ids:
                 seen_ids.add(normalized.id)
                 models.append(normalized)

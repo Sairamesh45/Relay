@@ -322,6 +322,19 @@ class CandidateDiscoveryService:
                             f"Estimated cost (${float(est_cost):.6f}) exceeds maximum threshold (${float(policy.maximum_cost_per_request):.6f})."
                         )
 
+            # Platform Free Models Policy:
+            # Reject any models requiring paid account credits
+            if pm.provider.lower() == "openrouter":
+                is_free_name = pm.provider_model_id.lower().endswith(":free")
+                is_free_price = (
+                    pm.input_price_per_million == 0
+                    and pm.output_price_per_million == 0
+                )
+                if not (is_free_name or is_free_price):
+                    reasons.append(
+                        f"Model '{pm.provider_model_id}' is a paid model. Platform currently supports free-tier models only."
+                    )
+
             if reasons:
                 excluded_candidates[candidate_key] = reasons
             else:
