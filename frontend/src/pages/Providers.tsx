@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui';
-import { ProviderCard, ProviderData, ConnectProviderDrawer } from '@/components/providers';
+import {
+  ProviderCard,
+  ProviderData,
+  ConnectProviderDrawer,
+  ManageKeysDrawer,
+} from '@/components/providers';
 import { api } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 
@@ -55,6 +60,8 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
   const { showToast } = useToast();
   const [providers, setProviders] = useState<ProviderData[]>(initialProviders || SUPPORTED_PROVIDERS);
   const [isConnectDrawerOpen, setIsConnectDrawerOpen] = useState(false);
+  const [selectedProviderForManage, setSelectedProviderForManage] = useState<ProviderData | null>(null);
+  const [isManageDrawerOpen, setIsManageDrawerOpen] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
 
   // Load live data from API
@@ -72,12 +79,20 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
 
       setProviders((prev) =>
         prev.map((p) => {
-          const matchingCreds = creds.filter(
-            (c: any) => c.provider?.toLowerCase() === p.providerKey.toLowerCase()
-          );
+          const pKey = p.providerKey.toLowerCase();
+          const matchingCreds = creds.filter((c: any) => {
+            const cp = (c.provider || '').toLowerCase();
+            return (
+              cp === pKey ||
+              (pKey === 'google' && cp === 'gemini') ||
+              (pKey === 'gemini' && cp === 'google')
+            );
+          });
+
           if (matchingCreds.length === 0) {
             return {
               ...p,
+              credentialId: undefined,
               connectedKeys: '0 keys',
               modelCount: 0,
               isCoolingDown: false,
@@ -95,16 +110,21 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
             matchingHealth?.health_status === 'rate_limited';
 
           const provModels = allModels.filter((m: any) =>
-            (m.offerings || m.routes || []).some(
-              (o: any) => o.provider?.toLowerCase() === p.providerKey.toLowerCase()
-            )
+            (m.offerings || m.routes || []).some((o: any) => {
+              const op = (o.provider || '').toLowerCase();
+              return (
+                op === pKey ||
+                (pKey === 'google' && op === 'gemini') ||
+                (pKey === 'gemini' && op === 'google')
+              );
+            })
           );
 
           return {
             ...p,
             credentialId: primaryCred.id,
             connectedKeys: `${matchingCreds.length} key${matchingCreds.length > 1 ? 's' : ''}`,
-            modelCount: provModels.length || p.modelCount,
+            modelCount: provModels.length,
             isHealthy: !isCooling,
             isCoolingDown: isCooling,
             cooldownSeconds: matchingHealth?.cooldown_remaining_seconds || 0,
@@ -156,19 +176,41 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
   const handleCheckNow = async (provider: ProviderData) => {
     setCheckingId(provider.id);
     try {
-      if (provider.credentialId) {
-        await api.providers.validate(provider.credentialId);
+      let targetCredId = provider.credentialId;
+      if (!targetCredId) {
+        // Look up credentials for this provider
+        const creds = await api.providers.credentials();
+        const pKey = provider.providerKey.toLowerCase();
+        const found = (Array.isArray(creds) ? creds : []).find((c: any) => {
+          const cp = (c.provider || '').toLowerCase();
+          return (
+            cp === pKey ||
+            (pKey === 'google' && cp === 'gemini') ||
+            (pKey === 'gemini' && cp === 'google')
+          );
+        });
+        targetCredId = found?.id;
       }
+
+      if (!targetCredId) {
+        showToast(`No keys connected for ${provider.name}. Click "Connect provider" to add one.`);
+        return;
+      }
+
+      await api.providers.validate(targetCredId);
       showToast(`${provider.name} connection checked`);
+      await loadProvidersData();
     } catch {
       showToast(`${provider.name} connection checked`);
+      await loadProvidersData();
     } finally {
       setCheckingId(null);
     }
   };
 
   const handleManageKeys = (provider: ProviderData) => {
-    showToast(`Managing keys for ${provider.name}`);
+    setSelectedProviderForManage(provider);
+    setIsManageDrawerOpen(true);
   };
 
   return (
@@ -206,6 +248,18 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
         isOpen={isConnectDrawerOpen}
         onClose={() => setIsConnectDrawerOpen(false)}
         onConnected={loadProvidersData}
+      />
+
+      {/* Slide-in Manage Keys Drawer */}
+      <ManageKeysDrawer
+        isOpen={isManageDrawerOpen}
+        onClose={() => {
+          setIsManageDrawerOpen(false);
+          setSelectedProviderForManage(null);
+        }}
+        provider={selectedProviderForManage}
+        onKeysChanged={loadProvidersData}
+        onAddKey={() => setIsConnectDrawerOpen(true)}
       />
     </div>
   );

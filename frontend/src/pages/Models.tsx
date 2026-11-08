@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui';
 import {
   ModelSearchFilter,
@@ -14,6 +15,7 @@ interface ModelsProps {
 }
 
 export const Models: React.FC<ModelsProps> = ({ initialModels }) => {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [models, setModels] = useState<ModelRowData[]>(initialModels || []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,11 +145,16 @@ export const Models: React.FC<ModelsProps> = ({ initialModels }) => {
         <div className="py-16 text-center border border-dashed border-line rounded-2xl bg-white/40">
           <p className="text-ink font-medium text-base">No models in catalog yet</p>
           <p className="text-mute text-sm mt-1 mb-5">
-            Connect a provider key and click 'Sync models' to automatically discover and register available models.
+            Connect a provider key to automatically discover and register available models.
           </p>
-          <Button variant="dark" onClick={handleSyncModels} disabled={isSyncing}>
-            {isSyncing ? 'Syncing...' : 'Sync models'}
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button variant="dark" onClick={() => navigate('/app/providers')}>
+              Connect Provider
+            </Button>
+            <Button variant="line" onClick={handleSyncModels} disabled={isSyncing}>
+              {isSyncing ? 'Syncing...' : 'Sync models'}
+            </Button>
+          </div>
         </div>
       ) : (
         <UnifiedModelTable models={filteredModels} />

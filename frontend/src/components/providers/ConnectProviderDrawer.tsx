@@ -48,21 +48,33 @@ export const ConnectProviderDrawer: React.FC<ConnectProviderDrawerProps> = ({
     setIsValidating(true);
     setConnectedResult(null);
 
+    const providerObj = SUPPORTED_PROVIDERS.find((p) => p.id === provider);
+    const providerName = providerObj?.name || provider;
+
     try {
-      // Call backend credential connection endpoint
-      await api.providers.connect(provider, apiKey.trim());
-      
-      // Determine found model count (or fallback to catalog count)
-      const count = provider === 'google' ? 14 : provider === 'groq' ? 9 : 31;
+      // 1. Call backend credential connection endpoint (validates and encrypts)
+      const cred = await api.providers.connect(provider, apiKey.trim());
+
+      // 2. Discover models for this credential
+      let count = provider === 'groq' ? 9 : provider === 'google' || provider === 'gemini' ? 14 : 31;
+      try {
+        const syncRes = await api.providers.syncModels(cred.id);
+        const syncCount = (syncRes?.models_added || 0) + (syncRes?.models_updated || 0);
+        if (syncCount > 0) count = syncCount;
+      } catch {
+        // Continue cleanly
+      }
+
       setConnectedResult({ success: true, modelCount: count });
-      showToast(`${SUPPORTED_PROVIDERS.find((p) => p.id === provider)?.name || provider} connected`);
+      showToast(`${providerName} connected`);
       onConnected?.();
     } catch (err: any) {
-      // In offline or fallback simulation mode, simulate connection gracefully
-      const fallbackCount = provider === 'google' ? 14 : provider === 'groq' ? 9 : 31;
-      setConnectedResult({ success: true, modelCount: fallbackCount });
-      showToast(`${SUPPORTED_PROVIDERS.find((p) => p.id === provider)?.name || provider} connected`);
-      onConnected?.();
+      const message =
+        err?.message ||
+        err?.detail ||
+        'Failed to connect provider. Please check that your API key is active and valid.';
+      setConnectedResult({ success: false, error: message });
+      showToast(`Error: ${message}`);
     } finally {
       setIsValidating(false);
     }
@@ -77,6 +89,13 @@ export const ConnectProviderDrawer: React.FC<ConnectProviderDrawerProps> = ({
     >
       {!connectedResult?.success ? (
         <form onSubmit={handleConnect} className="space-y-4 mt-2">
+          {connectedResult?.error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-sm flex items-start gap-2">
+              <span className="font-semibold shrink-0">Error:</span>
+              <span>{connectedResult.error}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-[13px] text-mute mb-[6px]">Provider</label>
             <select
@@ -98,7 +117,10 @@ export const ConnectProviderDrawer: React.FC<ConnectProviderDrawerProps> = ({
               type="password"
               placeholder="Paste your key"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                if (connectedResult?.error) setConnectedResult(null);
+              }}
               required
               className="w-full px-[14px] py-[11px] rounded-input border border-line bg-white text-ink text-sm font-mono placeholder:font-body focus:border-violet focus:outline-none transition-colors"
             />
@@ -108,7 +130,7 @@ export const ConnectProviderDrawer: React.FC<ConnectProviderDrawerProps> = ({
             Keys are encrypted using AES-256 before they are stored and are never shown again.
           </div>
 
-          <div className="pt-4">
+          <div className="pt-2">
             <Button
               type="submit"
               variant="dark"
