@@ -107,7 +107,7 @@ export const Auth: React.FC = () => {
               }}
               shape="pill"
               size="large"
-              width="100%"
+              width="320"
               text="continue_with"
             />
           </div>
