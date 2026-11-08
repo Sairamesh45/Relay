@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.core.config import get_settings
 from app.providers.base import BaseProvider
 from app.providers.exceptions import (
     InvalidCredentialsError,
@@ -23,6 +24,8 @@ from app.schemas.chat import (
     ChatResponseMessage,
     CompletionUsage,
 )
+
+settings = get_settings()
 
 
 class OpenRouterProvider(BaseProvider):
@@ -58,8 +61,14 @@ class OpenRouterProvider(BaseProvider):
 
         Consults the authenticated key inspection endpoint rather than the public model list.
         """
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return True
+
         url = f"{self.BASE_URL}/auth/key"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
 
         response = await self._execute_request("GET", url, headers=headers)
 
@@ -79,10 +88,56 @@ class OpenRouterProvider(BaseProvider):
             status_code=response.status_code,
         )
 
+    def _get_dev_mock_models(self) -> list[UnifiedModel]:
+        return [
+            UnifiedModel(
+                id="anthropic/claude-3.5-sonnet",
+                provider=self.provider_id,
+                name="Anthropic: Claude 3.5 Sonnet",
+                context_window=200000,
+                input_modalities=["text", "image"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                    "vision": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Anthropic flagship model available via OpenRouter."},
+            ),
+            UnifiedModel(
+                id="openai/gpt-4o",
+                provider=self.provider_id,
+                name="OpenAI: GPT-4o",
+                context_window=128000,
+                input_modalities=["text", "image"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                    "vision": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "OpenAI flagship omni intelligence via OpenRouter."},
+            ),
+        ]
+
     async def list_models(self, api_key: str) -> list[UnifiedModel]:
         """Fetch and normalize all available models on OpenRouter."""
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return self._get_dev_mock_models()
+
         url = f"{self.BASE_URL}/models"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
 
         response = await self._execute_request("GET", url, headers=headers)
 

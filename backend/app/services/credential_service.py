@@ -72,6 +72,7 @@ class CredentialService:
             )
 
         provider = self.provider_manager.get_provider(clean_provider_id)
+        canonical_provider_id = provider.provider_id
 
         # 1. Validate directly with provider
         clean_key = api_key.strip()
@@ -81,7 +82,7 @@ class CredentialService:
         fingerprint = generate_credential_fingerprint(clean_key)
         existing_stmt = select(ProviderCredential).where(
             ProviderCredential.user_id == user.id,
-            ProviderCredential.provider == clean_provider_id,
+            ProviderCredential.provider == canonical_provider_id,
             ProviderCredential.credential_fingerprint == fingerprint,
         )
         existing_res = await db.execute(existing_stmt)
@@ -92,7 +93,7 @@ class CredentialService:
         if existing_cred is not None:
             if existing_cred.status == "active":
                 raise DuplicateCredentialError(
-                    f"A credential for provider '{clean_provider_id}' with the same key is already active."
+                    f"A credential for provider '{canonical_provider_id}' with the same key is already active."
                 )
             # Reactivate if previously marked invalid or revoked
             existing_cred.status = "active"
@@ -111,7 +112,7 @@ class CredentialService:
         # 4. Create database record
         new_cred = ProviderCredential(
             user_id=user.id,
-            provider=clean_provider_id,
+            provider=canonical_provider_id,
             encrypted_api_key=encrypted_key,
             key_version=key_ver,
             credential_fingerprint=fingerprint,

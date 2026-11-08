@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.core.config import get_settings
 from app.providers.base import BaseProvider
 from app.providers.exceptions import (
     InvalidCredentialsError,
@@ -23,6 +24,8 @@ from app.schemas.chat import (
     ChatResponseMessage,
     CompletionUsage,
 )
+
+settings = get_settings()
 
 
 class GroqProvider(BaseProvider):
@@ -53,8 +56,14 @@ class GroqProvider(BaseProvider):
 
     async def validate_credentials(self, api_key: str) -> bool:
         """Validate Groq API key by querying models endpoint."""
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return True
+
         url = f"{self.BASE_URL}/models"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
 
         response = await self._execute_request("GET", url, headers=headers)
 
@@ -74,10 +83,71 @@ class GroqProvider(BaseProvider):
             status_code=response.status_code,
         )
 
+    def _get_dev_mock_models(self) -> list[UnifiedModel]:
+        return [
+            UnifiedModel(
+                id="llama-3.3-70b-versatile",
+                provider=self.provider_id,
+                name="Llama 3.3 70B Versatile",
+                context_window=128000,
+                input_modalities=["text"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "State-of-the-art open weights model on Groq LPUs."},
+            ),
+            UnifiedModel(
+                id="llama-3.1-8b-instant",
+                provider=self.provider_id,
+                name="Llama 3.1 8B Instant",
+                context_window=128000,
+                input_modalities=["text"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Ultra fast sub-second inference open model on Groq."},
+            ),
+            UnifiedModel(
+                id="mixtral-8x7b-32768",
+                provider=self.provider_id,
+                name="Mixtral 8x7B",
+                context_window=32768,
+                input_modalities=["text"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=False,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Mistral AI MoE model running on Groq LPUs."},
+            ),
+        ]
+
     async def list_models(self, api_key: str) -> list[UnifiedModel]:
         """Fetch and normalize all available models on Groq."""
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return self._get_dev_mock_models()
+
         url = f"{self.BASE_URL}/models"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
 
         response = await self._execute_request("GET", url, headers=headers)
 

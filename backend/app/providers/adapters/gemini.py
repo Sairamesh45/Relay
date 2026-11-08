@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.core.config import get_settings
 from app.providers.base import BaseProvider
 from app.providers.exceptions import (
     InvalidCredentialsError,
@@ -23,6 +24,8 @@ from app.schemas.chat import (
     ChatResponseMessage,
     CompletionUsage,
 )
+
+settings = get_settings()
 
 
 class GeminiProvider(BaseProvider):
@@ -53,8 +56,14 @@ class GeminiProvider(BaseProvider):
 
     async def validate_credentials(self, api_key: str) -> bool:
         """Validate Gemini API key by querying models endpoint with pageSize=1."""
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return True
+
         url = f"{self.BASE_URL}/models"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
         params = {"pageSize": 1}
 
         response = await self._execute_request(
@@ -101,10 +110,74 @@ class GeminiProvider(BaseProvider):
             status_code=response.status_code,
         )
 
+    def _get_dev_mock_models(self) -> list[UnifiedModel]:
+        return [
+            UnifiedModel(
+                id="gemini-1.5-pro",
+                provider=self.provider_id,
+                name="Gemini 1.5 Pro",
+                context_window=2097152,
+                input_modalities=["text", "image", "audio", "video"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                    "vision": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Flagship multimodal intelligence from Google DeepMind."},
+            ),
+            UnifiedModel(
+                id="gemini-1.5-flash",
+                provider=self.provider_id,
+                name="Gemini 1.5 Flash",
+                context_window=1048576,
+                input_modalities=["text", "image", "audio", "video"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                    "vision": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Fast workhorse multimodal model from Google DeepMind."},
+            ),
+            UnifiedModel(
+                id="gemini-2.0-flash",
+                provider=self.provider_id,
+                name="Gemini 2.0 Flash",
+                context_window=1048576,
+                input_modalities=["text", "image", "audio", "video"],
+                output_modalities=["text"],
+                supports_streaming=True,
+                supports_tools=True,
+                capabilities_confidence={
+                    "context_window": "confirmed",
+                    "streaming": "confirmed",
+                    "tools": "confirmed",
+                    "vision": "confirmed",
+                },
+                pricing=None,
+                metadata={"description": "Next-gen multimodal model built for real-time agentic workflows."},
+            ),
+        ]
+
     async def list_models(self, api_key: str) -> list[UnifiedModel]:
         """Fetch and normalize all available Google Gemini models handling pagination."""
+        clean_key = api_key.strip()
+        if settings.APP_ENV.lower() == "development" and clean_key.startswith(
+            ("test_", "mock_", "dev_")
+        ):
+            return self._get_dev_mock_models()
+
         url = f"{self.BASE_URL}/models"
-        headers = self._get_headers(api_key)
+        headers = self._get_headers(clean_key)
 
         models: list[UnifiedModel] = []
         seen_model_ids: set[str] = set()

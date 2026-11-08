@@ -7,6 +7,12 @@ from app.providers.base import BaseProvider
 from app.providers.exceptions import ProviderConfigurationError
 from app.providers.schemas.provider import ProviderInfo
 
+PROVIDER_ALIASES: dict[str, str] = {
+    "google": "gemini",
+    "google-gemini": "gemini",
+    "google_gemini": "gemini",
+}
+
 
 class ProviderManager:
     """Central registry and coordinator for AI provider adapters.
@@ -38,7 +44,8 @@ class ProviderManager:
         if not provider_id:
             raise ProviderConfigurationError("Provider identifier cannot be empty.")
 
-        provider_key = provider_id.strip().lower()
+        clean_id = provider_id.strip().lower()
+        provider_key = PROVIDER_ALIASES.get(clean_id, clean_id)
         if provider_key not in self._providers:
             available = sorted(self._providers.keys())
             raise ProviderConfigurationError(
@@ -52,7 +59,9 @@ class ProviderManager:
         """Check whether a given provider identifier is currently registered."""
         if not provider_id:
             return False
-        return provider_id.strip().lower() in self._providers
+        clean_id = provider_id.strip().lower()
+        provider_key = PROVIDER_ALIASES.get(clean_id, clean_id)
+        return provider_key in self._providers
 
     def list_supported_providers(self) -> list[ProviderInfo]:
         """Return metadata for all currently registered providers."""

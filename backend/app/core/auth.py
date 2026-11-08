@@ -268,11 +268,8 @@ async def get_current_user(
     if x_dev_user_id:
         try:
             dev_id = uuid.UUID(x_dev_user_id.strip())
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid X-Dev-User-Id header: must be a valid UUID.",
-            ) from exc
+        except ValueError:
+            dev_id = uuid.uuid5(uuid.NAMESPACE_DNS, x_dev_user_id.strip())
 
     if x_dev_user_email:
         email = x_dev_user_email.strip().lower()
