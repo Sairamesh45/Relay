@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --white: #F0F0F0;
+  --paper: #FAFAFA;
+  --violet: #5B3DFF;
+  --pink: #FF66E0;
+  --ink: #1A1530;
+  --mute: #6B6780;
+  --line: rgba(26, 21, 48, 0.10);
+  --line-landing: rgba(26, 21, 48, 0.12);
+  --glass: rgba(255, 255, 255, 0.62);
+  --display: 'Urbanist', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --d: var(--display);
+  --b: var(--body);
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: var(--body);
+  background-color: var(--white);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Glassmorphism primitives */
+.gl {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 22px;
+  padding: 24px;
+}
+
+.ambient-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--white);
+  min-height: 100vh;
+}
+
+.ambient-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(50% 40% at 100% 0, rgba(91, 61, 255, 0.22), transparent 70%),
+              radial-gradient(45% 40% at 0 100%, rgba(255, 102, 224, 0.2), transparent 70%);
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.animate-in {
+  animation: in 0.5s ease-out both;
+}
+
+.animate-dash {
+  stroke-dasharray: 4 7;
+  animation: dash 1s linear infinite;
+}
+
+/* Code block syntax tokens */
+.token-k { color: #B7A8FF; }
+.token-s { color: #FF9BEB; }
+.token-c { color: #8A84A8; }
+
+/* Focus styles matching relay.html */
+:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+  border-radius: 8px;
+}

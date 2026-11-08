@@ -157,6 +157,7 @@ async def test_google_auth_link_existing_email_user(
     assert response.status_code == 200
     assert response.json()["user"]["id"] == str(pre_existing_id)
 
+    db_session.expire_all()
     refreshed_user = await db_session.get(User, pre_existing_id)
     assert refreshed_user.oauth_provider == "google"
     assert refreshed_user.oauth_sub == "new-google-sub-777"
@@ -341,8 +342,11 @@ async def test_refresh_token_rotation_lifecycle(
     assert raw_refresh_2 != raw_refresh_1
 
     # 2. Attempting to reuse old revoked token is rejected (replay attack prevention)
-    async_client.cookies.set(REFRESH_TOKEN_COOKIE_NAME, raw_refresh_1)
-    replay_res = await async_client.post("/api/auth/refresh")
+    async_client.cookies.clear()
+    replay_res = await async_client.post(
+        "/api/auth/refresh",
+        cookies={REFRESH_TOKEN_COOKIE_NAME: raw_refresh_1},
+    )
     assert replay_res.status_code == 401
     assert "revoked" in replay_res.json()["detail"].lower()
 
