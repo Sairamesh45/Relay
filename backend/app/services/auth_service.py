@@ -106,7 +106,9 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
 
 
-async def create_refresh_token(user: User, db: AsyncSession) -> tuple[str, RefreshToken]:
+async def create_refresh_token(
+    user: User, db: AsyncSession
+) -> tuple[str, RefreshToken]:
     """Generate long-lived rotating refresh token and persist hashed record."""
     now = datetime.now(UTC)
     expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -169,7 +171,9 @@ def decode_relay_token(token: str, expected_type: str = "access") -> dict[str, A
     return payload
 
 
-async def get_or_create_user_from_google(claims: dict[str, Any], db: AsyncSession) -> User:
+async def get_or_create_user_from_google(
+    claims: dict[str, Any], db: AsyncSession
+) -> User:
     """Find or register a User using verified Google claims.
 
     Uses Google sub as primary identifier, maps to internal User UUID.
@@ -180,7 +184,9 @@ async def get_or_create_user_from_google(claims: dict[str, Any], db: AsyncSessio
     avatar_url = claims.get("picture")
 
     # 1. Search by oauth_sub and oauth_provider='google'
-    stmt = select(User).where(User.oauth_sub == google_sub, User.oauth_provider == "google")
+    stmt = select(User).where(
+        User.oauth_sub == google_sub, User.oauth_provider == "google"
+    )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -265,7 +271,9 @@ async def rotate_refresh_token(
     db_token = result.scalar_one_or_none()
 
     if not db_token:
-        logger.warning("Refresh token not found in database: token_hash=%s", token_hash[:12])
+        logger.warning(
+            "Refresh token not found in database: token_hash=%s", token_hash[:12]
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token.",

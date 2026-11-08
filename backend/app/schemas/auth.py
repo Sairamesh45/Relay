@@ -9,13 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 class GoogleAuthRequest(BaseModel):
     """Payload for Google ID token authentication."""
 
-    id_token: str = Field(..., description="Google ID token returned by Google Identity Services")
+    id_token: str = Field(
+        ..., description="Google ID token returned by Google Identity Services"
+    )
 
 
 class RefreshTokenRequest(BaseModel):
     """Optional payload for refresh token when not provided in HttpOnly cookie."""
 
-    refresh_token: str | None = Field(default=None, description="Optional raw refresh token")
+    refresh_token: str | None = Field(
+        default=None, description="Optional raw refresh token"
+    )
 
 
 class UserResponse(BaseModel):

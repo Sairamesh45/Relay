@@ -81,7 +81,9 @@ async def refresh_session(
         raw_refresh_token=raw_token,
         db=db,
     )
-    set_auth_cookies(response, access_token=new_access_token, refresh_token=new_refresh_token)
+    set_auth_cookies(
+        response, access_token=new_access_token, refresh_token=new_refresh_token
+    )
     return AuthResponse(user=UserResponse.model_validate(user), status="ok")
 
 

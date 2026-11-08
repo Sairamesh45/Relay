@@ -70,6 +70,4 @@ class RefreshToken(Base):
         back_populates="refresh_tokens",
     )
 
-    __table_args__ = (
-        Index("ix_refresh_tokens_user_active", "user_id", "is_revoked"),
-    )
+    __table_args__ = (Index("ix_refresh_tokens_user_active", "user_id", "is_revoked"),)

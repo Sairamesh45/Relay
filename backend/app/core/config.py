@@ -35,9 +35,7 @@ class Settings(BaseSettings):
     # Google OAuth & Relay Native JWT Configuration
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
-    JWT_SECRET_KEY: str = (
-        "relay_dev_jwt_secret_key_change_in_production_32b_min"
-    )
+    JWT_SECRET_KEY: str = "relay_dev_jwt_secret_key_change_in_production_32b_min"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     AUTH_COOKIE_SECURE: bool = False

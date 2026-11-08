@@ -21,7 +21,7 @@ const DEV_DEFAULT_USER: User = {
 };
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const isDev = Boolean(import.meta.env.DEV && !googleClientId);
+const isDev = Boolean(import.meta.env.DEV);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
