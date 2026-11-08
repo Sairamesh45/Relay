@@ -11,12 +11,14 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
+    EmailAuthRequest,
     GoogleAuthRequest,
     RefreshTokenRequest,
     UserResponse,
 )
 from app.services.auth_service import (
     REFRESH_TOKEN_COOKIE_NAME,
+    authenticate_with_email,
     authenticate_with_google,
     clear_auth_cookies,
     revoke_refresh_token,
@@ -27,6 +29,27 @@ from app.services.auth_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.post(
+    "/email",
+    response_model=AuthResponse,
+    summary="Sign in or register with email",
+    description="Authenticates or registers user by email address, issues Relay JWTs, sets HttpOnly cookies, and returns the user profile.",
+)
+async def email_auth(
+    payload: EmailAuthRequest,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthResponse:
+    """Authenticate or register user with a verified email address."""
+    user, access_token, refresh_token = await authenticate_with_email(
+        email=payload.email,
+        db=db,
+        full_name=payload.full_name,
+    )
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    return AuthResponse(user=UserResponse.model_validate(user), status="ok")
 
 
 @router.post(

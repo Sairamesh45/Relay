@@ -71,8 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ cooldownCount = 1 }) => {
       {/* User profile footer */}
       <div className="mt-auto flex items-center gap-[10px] pt-3 px-2 border-t border-line text-[13px] max-app:hidden">
         <span className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-violet to-pink shrink-0" />
-        <span className="flex-1 truncate font-medium text-ink" title={user?.email || 'alex@studio.dev'}>
-          {user?.email || 'alex@studio.dev'}
+        <span className="flex-1 truncate font-medium text-ink" title={user?.email || 'Account'}>
+          {user?.email || 'Account'}
         </span>
         <button
           onClick={handleSignOut}

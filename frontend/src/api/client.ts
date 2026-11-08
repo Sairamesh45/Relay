@@ -18,12 +18,8 @@ export class ApiError extends Error {
 }
 
 let authToken: string | null = null;
-let devUserId =
-  (typeof window !== 'undefined' && localStorage.getItem('relay_dev_user_id')) ||
-  '1b1b001f-d53f-46b4-8f95-167f72873b6b';
-let devUserEmail =
-  (typeof window !== 'undefined' && localStorage.getItem('relay_dev_user_email')) ||
-  'sairamesh189@gmail.com';
+let devUserId: string | null = null;
+let devUserEmail: string | null = null;
 
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
@@ -32,15 +28,9 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
-export function setDevUser(id: string, email: string) {
+export function setDevUser(id: string | null, email: string | null) {
   devUserId = id;
   devUserEmail = email;
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('relay_dev_user_id', id);
-      localStorage.setItem('relay_dev_user_email', email);
-    } catch {}
-  }
 }
 
 async function attemptTokenRefresh(): Promise<boolean> {
@@ -148,6 +138,8 @@ export const api = {
 
   auth: {
     me: () => api.get('/auth/me'),
+    email: (email: string, full_name?: string) =>
+      api.post('/auth/email', { email, full_name }),
     google: (idToken: string) => api.post('/auth/google', { id_token: idToken }),
     refresh: () => api.post('/auth/refresh'),
     logout: () => api.post('/auth/logout'),

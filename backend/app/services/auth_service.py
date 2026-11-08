@@ -259,6 +259,50 @@ async def authenticate_with_google(
     return user, access_token, raw_refresh_token
 
 
+async def authenticate_with_email(
+    email: str, db: AsyncSession, full_name: str | None = None
+) -> tuple[User, str, str]:
+    """Authenticate or register user with email and generate access + refresh tokens."""
+    clean_email = email.strip().lower()
+    if not clean_email or "@" not in clean_email or "." not in clean_email.split("@")[-1]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A valid email address is required.",
+        )
+
+    stmt = select(User).where(User.email == clean_email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        computed_name = (
+            full_name
+            or clean_email.split("@")[0].replace(".", " ").replace("-", " ").title()
+        )
+        user = User(
+            id=uuid.uuid4(),
+            email=clean_email,
+            full_name=computed_name,
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated.",
+        )
+
+    access_token = create_access_token(user)
+    raw_refresh_token, _ = await create_refresh_token(user, db)
+    await db.commit()
+    await db.refresh(user)
+
+    return user, access_token, raw_refresh_token
+
+
 async def rotate_refresh_token(
     raw_refresh_token: str, db: AsyncSession
 ) -> tuple[User, str, str]:

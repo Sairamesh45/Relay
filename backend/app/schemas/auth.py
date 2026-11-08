@@ -14,6 +14,13 @@ class GoogleAuthRequest(BaseModel):
     )
 
 
+class EmailAuthRequest(BaseModel):
+    """Payload for email-based authentication."""
+
+    email: str = Field(..., description="User email address")
+    full_name: str | None = Field(default=None, description="Optional user display name")
+
+
 class RefreshTokenRequest(BaseModel):
     """Optional payload for refresh token when not provided in HttpOnly cookie."""
 

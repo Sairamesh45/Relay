@@ -4,8 +4,9 @@ import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useAuth } from '@/context/AuthContext';
 
 export const Auth: React.FC = () => {
-  const { user, signInWithGoogle, isDevMode, error: authError } = useAuth();
+  const { user, signInWithGoogle, signInWithEmail, error: authError } = useAuth();
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -14,6 +15,25 @@ export const Auth: React.FC = () => {
       navigate('/app/overview', { replace: true });
     }
   }, [user, navigate]);
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = email.trim();
+    if (!clean || !clean.includes('@') || !clean.includes('.')) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await signInWithEmail(clean);
+      navigate('/app/overview');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Authentication failed. Please check your email.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) {
@@ -27,19 +47,6 @@ export const Auth: React.FC = () => {
       navigate('/app/overview');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Google Sign-In failed.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDevSignIn = async () => {
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await signInWithGoogle();
-      navigate('/app/overview');
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Dev Sign-In failed.');
     } finally {
       setIsSubmitting(false);
     }
@@ -76,10 +83,10 @@ export const Auth: React.FC = () => {
       <div className="grid place-content-center p-12 max-w-[430px] mx-auto w-full gap-5 max-app:p-6">
         <div>
           <h2 className="font-display font-normal text-[22px] leading-appHeadline text-ink">
-            Welcome back
+            Welcome to Relay
           </h2>
           <p className="text-[15px] text-mute mt-1">
-            Sign in with Google to open your dashboard.
+            Sign in to access your gateway dashboard and API keys.
           </p>
         </div>
 
@@ -90,53 +97,56 @@ export const Auth: React.FC = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 w-full">
-          {/* Dev Mode Primary Fast-Pass */}
-          {isDevMode && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={handleDevSignIn}
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 bg-violet text-white font-medium text-[14px] rounded-pill py-3 px-5 hover:bg-violet-dark transition-all cursor-pointer w-full shadow-md disabled:opacity-50"
-              >
-                <span>{isSubmitting ? 'Signing in…' : 'Continue as Sai Ramesh (sairamesh189@gmail.com)'}</span>
-              </button>
-              <div className="text-center text-[12px] text-mute flex items-center justify-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>3 Providers Active &bull; 84 Free Models &bull; Instant Access</span>
-              </div>
-              <div className="flex items-center gap-2 my-2 text-mute text-xs">
-                <hr className="flex-1 border-line" />
-                <span>or use Google OAuth</span>
-                <hr className="flex-1 border-line" />
-              </div>
-            </div>
-          )}
-
-          {/* Native Google OAuth Button */}
-          <div className="flex justify-center w-full min-h-[44px]">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => {
-                setErrorMessage('Google Sign-In failed: The OAuth Client ID in your .env is invalid or not registered in Google Cloud Console. Click "Continue with Developer Identity" above to proceed without Google.');
-              }}
-              shape="pill"
-              size="large"
-              width="100%"
-              text="continue_with"
+        {/* Email Sign-In Form */}
+        <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3 w-full">
+          <div>
+            <label htmlFor="email" className="block text-[13px] font-medium text-ink mb-1.5">
+              Email address
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
+              className="w-full px-4 py-2.5 rounded-xl border border-line bg-white text-ink text-[14px] placeholder:text-mute focus:outline-none focus:ring-2 focus:ring-violet focus:border-transparent transition-all"
+              disabled={isSubmitting}
             />
           </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting || !email.trim()}
+            className="inline-flex items-center justify-center gap-2 bg-violet text-white font-medium text-[14px] rounded-pill py-3 px-5 hover:bg-violet-dark transition-all cursor-pointer w-full shadow-md disabled:opacity-50"
+          >
+            <span>{isSubmitting ? 'Signing in…' : 'Continue with Email'}</span>
+          </button>
+        </form>
+
+        <div className="flex items-center gap-2 my-1 text-mute text-xs">
+          <hr className="flex-1 border-line" />
+          <span>or sign in with Google</span>
+          <hr className="flex-1 border-line" />
         </div>
 
-        {isDevMode && (
-          <div className="text-center text-[12px] text-mute bg-ink/5 p-2 rounded-lg">
-            Development Mode &bull; Uses local auth bypass when Google Client ID is unconfigured
-          </div>
-        )}
+        {/* Native Google OAuth Button */}
+        <div className="flex justify-center w-full min-h-[44px]">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => {
+              setErrorMessage('Google Sign-In failed: Google OAuth client not configured. Use the email field above to sign in.');
+            }}
+            shape="pill"
+            size="large"
+            width="100%"
+            text="continue_with"
+          />
+        </div>
 
         <p className="text-[13px] text-mute text-center leading-relaxed">
-          Sessions are secured via HttpOnly cookies. Relay never exposes access tokens to client JavaScript.
+          Sessions are secured via HttpOnly cookies. Enter any email to access your workspace.
         </p>
       </div>
     </div>

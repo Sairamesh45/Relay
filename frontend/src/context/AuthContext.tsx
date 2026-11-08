@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { api, setDevUser } from '@/api/client';
+import { api } from '@/api/client';
 import { User } from '@/types';
 
 interface AuthContextType {
@@ -7,6 +7,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   signInWithGoogle: (idToken?: string) => Promise<void>;
+  signInWithEmail: (email: string, name?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
   isDevMode: boolean;
@@ -14,13 +15,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEV_DEFAULT_USER: User = {
-  id: '1b1b001f-d53f-46b4-8f95-167f72873b6b',
-  email: 'sairamesh189@gmail.com',
-  fullName: 'Sai Ramesh',
-};
-
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const isDev = Boolean(import.meta.env.DEV);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -35,11 +29,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const u: User = {
           id: res.user.id,
           email: res.user.email || '',
-          fullName: res.user.full_name || 'Developer Admin',
+          fullName: res.user.full_name || 'User',
           avatarUrl: res.user.avatar_url,
         };
         setUser(u);
-        setDevUser(u.id, u.email);
         return u;
       }
       setUser(null);
@@ -77,29 +70,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signInWithGoogle = async (idToken?: string) => {
+  const signInWithEmail = async (email: string, name?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      if (idToken) {
-        // Production flow: exchange verified Google ID token for Relay session cookies
-        const res = await api.auth.google(idToken);
-        if (res && res.user) {
-          const u: User = {
-            id: res.user.id,
-            email: res.user.email || '',
-            fullName: res.user.full_name,
-            avatarUrl: res.user.avatar_url,
-          };
-          setUser(u);
-          setDevUser(u.id, u.email);
-        }
-      } else if (isDev) {
-        // Dev fallback when Google Client ID is not configured
-        setUser(DEV_DEFAULT_USER);
-        setDevUser(DEV_DEFAULT_USER.id, DEV_DEFAULT_USER.email);
-      } else {
-        throw new Error('Google ID token is required for authentication.');
+      const res = await api.auth.email(email.trim(), name);
+      if (res && res.user) {
+        const u: User = {
+          id: res.user.id,
+          email: res.user.email || email.trim(),
+          fullName: res.user.full_name || email.trim().split('@')[0],
+          avatarUrl: res.user.avatar_url,
+        };
+        setUser(u);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Email authentication failed';
+      setError(msg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async (idToken?: string) => {
+    if (!idToken) {
+      throw new Error('Google ID token is required for Google Sign-In.');
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await api.auth.google(idToken);
+      if (res && res.user) {
+        const u: User = {
+          id: res.user.id,
+          email: res.user.email || '',
+          fullName: res.user.full_name,
+          avatarUrl: res.user.avatar_url,
+        };
+        setUser(u);
       }
     } catch (err: any) {
       const msg = err?.message || 'Google authentication failed';
@@ -130,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         error,
         signInWithGoogle,
+        signInWithEmail,
         signOut,
         refreshUser,
         isDevMode: isDev,
