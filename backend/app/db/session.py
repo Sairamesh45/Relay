@@ -29,6 +29,7 @@ def get_engine() -> AsyncEngine:
             settings.DATABASE_URL,
             echo=settings.DEBUG and settings.APP_ENV == "development",
             pool_pre_ping=True,
+            pool_recycle=300,
             pool_size=10,
             max_overflow=20,
         )
