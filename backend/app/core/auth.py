@@ -250,11 +250,11 @@ async def get_current_user(
 
             return user
 
-    # 3. Development identity fallback (only permitted when APP_ENV == 'development' AND ENABLE_DEV_AUTH is True)
+    # 3. Development identity fallback (only permitted when APP_ENV == 'development' AND ENABLE_DEV_AUTH is True AND X-Dev-User-Id header is explicitly provided)
     is_dev = settings.APP_ENV.lower() == "development"
     dev_auth_enabled = settings.ENABLE_DEV_AUTH
 
-    if not is_dev or not dev_auth_enabled:
+    if not is_dev or not dev_auth_enabled or not x_dev_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please provide a valid Bearer token.",

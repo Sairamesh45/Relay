@@ -4,9 +4,8 @@ import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useAuth } from '@/context/AuthContext';
 
 export const Auth: React.FC = () => {
-  const { user, signInWithGoogle, signInWithEmail, error: authError } = useAuth();
+  const { user, signInWithGoogle, error: authError } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -15,25 +14,6 @@ export const Auth: React.FC = () => {
       navigate('/app/overview', { replace: true });
     }
   }, [user, navigate]);
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = email.trim();
-    if (!clean || !clean.includes('@') || !clean.includes('.')) {
-      setErrorMessage('Please enter a valid email address.');
-      return;
-    }
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await signInWithEmail(clean);
-      navigate('/app/overview');
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Authentication failed. Please check your email.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) {
@@ -79,76 +59,72 @@ export const Auth: React.FC = () => {
         </span>
       </div>
 
-      {/* Form Area */}
-      <div className="grid place-content-center p-12 max-w-[430px] mx-auto w-full gap-5 max-app:p-6">
+      {/* Auth Panel */}
+      <div className="grid place-content-center p-12 max-w-[440px] mx-auto w-full gap-6 max-app:p-6">
         <div>
-          <h2 className="font-display font-normal text-[22px] leading-appHeadline text-ink">
-            Welcome to Relay
+          <h2 className="font-display font-normal text-[26px] leading-appHeadline text-ink">
+            Welcome back to Relay
           </h2>
-          <p className="text-[15px] text-mute mt-1">
-            Sign in to access your gateway dashboard and API keys.
+          <p className="text-[15px] text-mute mt-2">
+            Sign in with your Google account to access your gateway dashboard, model routes, and virtual keys.
           </p>
         </div>
 
         {(errorMessage || authError) && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-sm flex items-start gap-2">
-            <span className="font-semibold shrink-0">Error:</span>
-            <span>{errorMessage || authError}</span>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm flex items-start gap-2.5 shadow-sm">
+            <svg
+              className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div className="text-xs leading-relaxed space-y-1">
+              <span className="font-semibold block text-sm">Sign-In Notice</span>
+              <span>{errorMessage || authError}</span>
+            </div>
           </div>
         )}
 
-        {/* Email Sign-In Form */}
-        <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3 w-full">
-          <div>
-            <label htmlFor="email" className="block text-[13px] font-medium text-ink mb-1.5">
-              Email address
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              className="w-full px-4 py-2.5 rounded-xl border border-line bg-white text-ink text-[14px] placeholder:text-mute focus:outline-none focus:ring-2 focus:ring-violet focus:border-transparent transition-all"
-              disabled={isSubmitting}
+        {/* Google OAuth Card */}
+        <div className="p-6 rounded-2xl border border-line bg-white/80 shadow-sm flex flex-col items-center gap-4">
+          <p className="text-xs text-mute font-medium text-center">
+            Continue securely with Google Single Sign-On
+          </p>
+          <div className="flex justify-center w-full min-h-[44px]">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                setErrorMessage(
+                  'Google Sign-In failed: The OAuth client was not found or has expired. Please check GOOGLE_CLIENT_ID in your configuration.'
+                );
+              }}
+              shape="pill"
+              size="large"
+              width="100%"
+              text="continue_with"
             />
           </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting || !email.trim()}
-            className="inline-flex items-center justify-center gap-2 bg-violet text-white font-medium text-[14px] rounded-pill py-3 px-5 hover:bg-violet-dark transition-all cursor-pointer w-full shadow-md disabled:opacity-50"
-          >
-            <span>{isSubmitting ? 'Signing in…' : 'Continue with Email'}</span>
-          </button>
-        </form>
-
-        <div className="flex items-center gap-2 my-1 text-mute text-xs">
-          <hr className="flex-1 border-line" />
-          <span>or sign in with Google</span>
-          <hr className="flex-1 border-line" />
+          {isSubmitting && (
+            <div className="flex items-center gap-2 text-xs text-violet animate-pulse">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-violet border-t-transparent animate-spin" />
+              <span>Verifying Google account...</span>
+            </div>
+          )}
         </div>
 
-        {/* Native Google OAuth Button */}
-        <div className="flex justify-center w-full min-h-[44px]">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => {
-              setErrorMessage('Google Sign-In failed: Google OAuth client not configured. Use the email field above to sign in.');
-            }}
-            shape="pill"
-            size="large"
-            width="100%"
-            text="continue_with"
-          />
-        </div>
-
-        <p className="text-[13px] text-mute text-center leading-relaxed">
-          Sessions are secured via HttpOnly cookies. Enter any email to access your workspace.
+        <p className="text-[12px] text-mute text-center leading-relaxed">
+          Sessions are secured via HttpOnly cookies. Your provider keys and telemetry remain strictly isolated to your account.
         </p>
       </div>
     </div>
   );
 };
+
+export default Auth;

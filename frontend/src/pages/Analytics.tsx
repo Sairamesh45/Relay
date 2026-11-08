@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { TokenMetrics } from '@/components/analytics/TokenMetrics';
@@ -13,36 +13,54 @@ interface AnalyticsProps {
 export const Analytics: React.FC<AnalyticsProps> = ({ initialSummary }) => {
   const [summaryData, setSummaryData] = useState<any>(initialSummary || null);
   const [requestsList, setRequestsList] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    if (initialSummary) return;
-    let mounted = true;
+  const loadUsage = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsRefreshing(true);
+    }
+    try {
+      const [usageRes, reqsRes] = await Promise.allSettled([
+        api.usage.summary(),
+        api.usage.requests({ limit: 100 }),
+      ]);
 
-    async function loadUsage() {
-      try {
-        const [usageRes, reqsRes] = await Promise.allSettled([
-          api.usage.summary(),
-          api.usage.requests({ limit: 100 }),
-        ]);
-
-        if (mounted) {
-          if (usageRes.status === 'fulfilled' && usageRes.value) {
-            setSummaryData(usageRes.value);
-          }
-          if (reqsRes.status === 'fulfilled' && reqsRes.value?.logs) {
-            setRequestsList(reqsRes.value.logs);
-          }
+      if (isMountedRef.current) {
+        if (usageRes.status === 'fulfilled' && usageRes.value) {
+          setSummaryData(usageRes.value);
         }
-      } catch {
-        // Handled cleanly
+        if (reqsRes.status === 'fulfilled' && reqsRes.value?.logs) {
+          setRequestsList(reqsRes.value.logs);
+        }
+        setLastRefreshedAt(new Date());
+      }
+    } catch {
+      // Retain existing state on transient error
+    } finally {
+      if (isMountedRef.current) {
+        setIsRefreshing(false);
       }
     }
+  }, []);
 
-    loadUsage();
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (initialSummary) return;
+
+    loadUsage(false);
+
+    // Auto-polling every 5 seconds for live usage analytics
+    const interval = setInterval(() => {
+      loadUsage(true);
+    }, 5000);
+
     return () => {
-      mounted = false;
+      isMountedRef.current = false;
+      clearInterval(interval);
     };
-  }, [initialSummary]);
+  }, [initialSummary, loadUsage]);
 
   const totalRequests = summaryData?.total_requests ?? 0;
   const inputTokens = summaryData?.total_input_tokens ?? 0;
@@ -62,12 +80,49 @@ export const Analytics: React.FC<AnalyticsProps> = ({ initialSummary }) => {
       {/* Header */}
       <div className="flex justify-between items-end gap-5 mb-7 flex-wrap">
         <div>
-          <h1 className="font-display font-light text-[42px] leading-appHeadline tracking-headline text-ink">
-            Analytics
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-display font-light text-[42px] leading-appHeadline tracking-headline text-ink">
+              Analytics
+            </h1>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-green-50 border border-green-200 text-green-700 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span>Live Updates</span>
+            </div>
+          </div>
           <p className="text-mute text-[15px] mt-2">
             Request volumes, provider breakdown, and token consumption metrics.
+            <span className="text-xs text-mute/80 ml-2">
+              (Auto-refreshes every 5s · Updated {lastRefreshedAt.toLocaleTimeString()})
+            </span>
           </p>
+        </div>
+
+        {/* Manual Refresh Button */}
+        <div>
+          <button
+            type="button"
+            onClick={() => loadUsage(false)}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-input border border-line bg-white text-ink text-sm hover:bg-marshmallow transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+            title="Refresh analytics and usage metrics now"
+          >
+            <svg
+              className={`w-4 h-4 text-violet ${isRefreshing ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span className="font-medium text-xs">
+              {isRefreshing ? 'Refreshing…' : 'Refresh'}
+            </span>
+          </button>
         </div>
       </div>
 
