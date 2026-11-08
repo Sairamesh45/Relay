@@ -75,7 +75,16 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
 
       const creds = credsRes.status === 'fulfilled' && Array.isArray(credsRes.value) ? credsRes.value : [];
       const healthList = healthRes.status === 'fulfilled' && Array.isArray(healthRes.value) ? healthRes.value : [];
-      const allModels = modelsRes.status === 'fulfilled' && Array.isArray(modelsRes.value?.models) ? modelsRes.value.models : [];
+      const allModels =
+        modelsRes.status === 'fulfilled'
+          ? Array.isArray(modelsRes.value?.items)
+            ? modelsRes.value.items
+            : Array.isArray(modelsRes.value?.models)
+            ? modelsRes.value.models
+            : Array.isArray(modelsRes.value)
+            ? modelsRes.value
+            : []
+          : [];
 
       setProviders((prev) =>
         prev.map((p) => {
@@ -110,7 +119,7 @@ export const Providers: React.FC<ProvidersProps> = ({ initialProviders }) => {
             matchingHealth?.health_status === 'rate_limited';
 
           const provModels = allModels.filter((m: any) =>
-            (m.offerings || m.routes || []).some((o: any) => {
+            (m.provider_offerings || m.offerings || m.routes || []).some((o: any) => {
               const op = (o.provider || '').toLowerCase();
               return (
                 op === pKey ||

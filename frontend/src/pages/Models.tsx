@@ -28,25 +28,76 @@ export const Models: React.FC<ModelsProps> = ({ initialModels }) => {
     setIsLoading(true);
     try {
       const res = await api.models.list();
-      if (res && Array.isArray(res.models)) {
-        const transformed: ModelRowData[] = res.models.map((m: any) => ({
-          id: m.id || m.canonical_name || m.name,
-          name: m.name || m.canonical_name,
-          contextWindow: m.context_window_tokens
-            ? `${Math.round(m.context_window_tokens / 1000)}K`
-            : m.context_window || '128K',
-          capabilities: [
-            'Text',
-            ...(m.supported_capabilities || []).map((c: string) =>
-              c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()
-            ),
-          ].filter((v, i, a) => a.indexOf(v) === i),
-          routes: (m.offerings || m.routes || []).map((o: any) => ({
-            provider: o.provider || 'Gateway',
-            isAvailable: o.is_available ?? o.availability_status === 'available',
-            latencyMs: o.median_latency_ms,
-          })),
-        }));
+      const rawList = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.models)
+        ? res.models
+        : Array.isArray(res)
+        ? res
+        : [];
+
+      if (rawList.length > 0) {
+        const transformed: ModelRowData[] = rawList.map((m: any) => {
+          const offerings = m.provider_offerings || m.offerings || m.routes || [];
+
+          // Format friendly name
+          const rawName =
+            m.display_name || m.name || m.canonical_id || m.canonical_name || 'Unnamed Model';
+
+          // Context window formatting
+          let contextStr = '128K';
+          const ctx =
+            offerings.find((o: any) => o.context_window)?.context_window ||
+            m.context_window_tokens ||
+            m.context_window;
+          if (ctx) {
+            if (ctx >= 1000000) {
+              contextStr = `${Math.round(ctx / 1000000)}M`;
+            } else if (ctx >= 1000) {
+              contextStr = `${Math.round(ctx / 1000)}K`;
+            } else {
+              contextStr = `${ctx}`;
+            }
+          }
+
+          // Capabilities detection
+          const caps = new Set<string>(['Text']);
+          const inMods = m.input_modalities || [];
+          if (inMods.includes('image') || offerings.some((o: any) => o.supports_vision)) {
+            caps.add('Image');
+          }
+          if (offerings.some((o: any) => o.supports_tools)) {
+            caps.add('Tools');
+          }
+          if (Array.isArray(m.supported_capabilities)) {
+            m.supported_capabilities.forEach((c: string) => {
+              caps.add(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase());
+            });
+          }
+
+          // Routes / Provider badges
+          const routes: ModelRoute[] = offerings.map((o: any) => {
+            const rawP = o.provider || 'Gateway';
+            const displayP =
+              rawP.toLowerCase() === 'gemini'
+                ? 'Google Gemini'
+                : rawP.charAt(0).toUpperCase() + rawP.slice(1);
+            return {
+              provider: displayP,
+              isAvailable: o.availability_status === 'available' || o.is_available === true,
+              latencyMs: o.median_latency_ms,
+            };
+          });
+
+          return {
+            id: m.id || m.canonical_id || m.canonical_name || rawName,
+            name: rawName,
+            contextWindow: contextStr,
+            capabilities: Array.from(caps),
+            routes: routes.length > 0 ? routes : [{ provider: 'Gateway', isAvailable: true }],
+          };
+        });
+
         setModels(transformed);
       } else {
         setModels([]);

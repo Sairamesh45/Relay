@@ -158,11 +158,12 @@ export const api = {
   },
 
   models: {
-    list: (params?: { query?: string; capability?: string }) => {
+    list: (params?: { query?: string; capability?: string; limit?: number }) => {
       const q = new URLSearchParams();
       if (params?.query) q.set('q', params.query);
       if (params?.capability) q.set('capability', params.capability);
-      const queryStr = q.toString() ? `?${q.toString()}` : '';
+      q.set('limit', String(params?.limit || 500));
+      const queryStr = `?${q.toString()}`;
       return api.get(`/models${queryStr}`);
     },
     sync: () => api.post('/models/sync'),

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { api } from '@/api/client';
+import { api, setDevUser } from '@/api/client';
 import { User } from '@/types';
 
 interface AuthContextType {
@@ -39,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarUrl: res.user.avatar_url,
         };
         setUser(u);
+        setDevUser(u.id, u.email);
         return u;
       }
       setUser(null);
@@ -91,10 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             avatarUrl: res.user.avatar_url,
           };
           setUser(u);
+          setDevUser(u.id, u.email);
         }
       } else if (isDev) {
         // Dev fallback when Google Client ID is not configured
         setUser(DEV_DEFAULT_USER);
+        setDevUser(DEV_DEFAULT_USER.id, DEV_DEFAULT_USER.email);
       } else {
         throw new Error('Google ID token is required for authentication.');
       }

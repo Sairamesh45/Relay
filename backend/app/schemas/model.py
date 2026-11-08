@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class ProviderOfferingRead(BaseModel):
@@ -59,6 +59,24 @@ class UnifiedModelRead(BaseModel):
 
     provider_offerings: list[ProviderOfferingRead] = Field(default_factory=list)
 
+    @computed_field
+    @property
+    def name(self) -> str:
+        """Friendly model display name or canonical fallback."""
+        return self.display_name or self.canonical_id
+
+    @computed_field
+    @property
+    def canonical_name(self) -> str:
+        """Canonical identifier alias."""
+        return self.canonical_id
+
+    @computed_field
+    @property
+    def offerings(self) -> list[ProviderOfferingRead]:
+        """Alias for provider_offerings."""
+        return self.provider_offerings
+
 
 class UnifiedModelListResponse(BaseModel):
     """Paginated list response of unified models."""
@@ -67,6 +85,12 @@ class UnifiedModelListResponse(BaseModel):
     limit: int
     offset: int
     items: list[UnifiedModelRead]
+
+    @computed_field
+    @property
+    def models(self) -> list[UnifiedModelRead]:
+        """Alias for items."""
+        return self.items
 
 
 class ProviderSummaryItem(BaseModel):
