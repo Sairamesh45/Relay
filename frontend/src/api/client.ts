@@ -18,8 +18,12 @@ export class ApiError extends Error {
 }
 
 let authToken: string | null = null;
-let devUserId = '00000000-0000-0000-0000-000000000001';
-let devUserEmail = 'developer@gateway.local';
+let devUserId =
+  (typeof window !== 'undefined' && localStorage.getItem('relay_dev_user_id')) ||
+  '1b1b001f-d53f-46b4-8f95-167f72873b6b';
+let devUserEmail =
+  (typeof window !== 'undefined' && localStorage.getItem('relay_dev_user_email')) ||
+  'sairamesh189@gmail.com';
 
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
@@ -31,6 +35,12 @@ export function setAuthToken(token: string | null) {
 export function setDevUser(id: string, email: string) {
   devUserId = id;
   devUserEmail = email;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('relay_dev_user_id', id);
+      localStorage.setItem('relay_dev_user_email', email);
+    } catch {}
+  }
 }
 
 async function attemptTokenRefresh(): Promise<boolean> {

@@ -15,9 +15,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEV_DEFAULT_USER: User = {
-  id: '00000000-0000-0000-0000-000000000001',
-  email: 'developer@gateway.local',
-  fullName: 'Developer Admin',
+  id: '1b1b001f-d53f-46b4-8f95-167f72873b6b',
+  email: 'sairamesh189@gmail.com',
+  fullName: 'Sai Ramesh',
 };
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';

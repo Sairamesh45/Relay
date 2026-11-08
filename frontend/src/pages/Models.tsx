@@ -6,6 +6,7 @@ import {
   CapabilityFilter,
   UnifiedModelTable,
   ModelRowData,
+  ModelRoute,
 } from '@/components/models';
 import { api } from '@/api/client';
 import { useToast } from '@/context/ToastContext';

@@ -266,9 +266,11 @@ async def test_streaming_chat_completion_sse_chunks(db_session: AsyncSession) ->
     pm = ProviderModel(
         unified_model_id=um.id,
         provider="openrouter",
-        provider_model_id="openai/gpt-4o",
+        provider_model_id="openai/gpt-4o:free",
         credential_id=cred.id,
         availability_status="available",
+        input_price_per_million=0,
+        output_price_per_million=0,
     )
     db_session.add(pm)
     await db_session.commit()
@@ -294,7 +296,7 @@ async def test_streaming_chat_completion_sse_chunks(db_session: AsyncSession) ->
 
         gateway_svc = ChatGatewayService(provider_manager=mgr)
         chat_req = ChatCompletionRequest(
-            model="openrouter:openai/gpt-4o",
+            model="openrouter:openai/gpt-4o:free",
             messages=[ChatMessage(role="user", content="Stream test")],
             stream=True,
         )

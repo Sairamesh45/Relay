@@ -537,7 +537,7 @@ class FailoverExecutionEngine:
                         ),
                     )
                     db.add(decision_log)
-                    await db.flush()
+                    await db.commit()
                 except Exception as e:
                     logger.warning("Failed to record success state or audit log: %s", e)
 
@@ -941,7 +941,7 @@ class FailoverExecutionEngine:
                         ),
                     )
                     db.add(decision_log)
-                    await db.flush()
+                    await db.commit()
                 except Exception as e:
                     logger.warning(
                         "Failed to record streaming success state or audit log: %s", e

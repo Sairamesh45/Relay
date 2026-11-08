@@ -21,8 +21,8 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-DEFAULT_DEV_USER_EMAIL = "developer@gateway.local"
-DEFAULT_DEV_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+DEFAULT_DEV_USER_EMAIL = "sairamesh189@gmail.com"
+DEFAULT_DEV_USER_ID = uuid.UUID("1b1b001f-d53f-46b4-8f95-167f72873b6b")
 
 
 def _base64url_decode(s: str) -> bytes:

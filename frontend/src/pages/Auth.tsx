@@ -93,17 +93,18 @@ export const Auth: React.FC = () => {
         <div className="flex flex-col gap-3 w-full">
           {/* Dev Mode Primary Fast-Pass */}
           {isDevMode && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <button
                 type="button"
                 onClick={handleDevSignIn}
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center gap-2 bg-violet text-white font-medium text-[14px] rounded-pill py-3 px-5 hover:bg-violet-dark transition-all cursor-pointer w-full shadow-md disabled:opacity-50"
               >
-                <span>{isSubmitting ? 'Signing in…' : 'Continue with Developer Identity'}</span>
+                <span>{isSubmitting ? 'Signing in…' : 'Continue as Sai Ramesh (sairamesh189@gmail.com)'}</span>
               </button>
-              <div className="text-center text-[12px] text-mute">
-                Instant access for local development &bull; No Google setup required
+              <div className="text-center text-[12px] text-mute flex items-center justify-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>3 Providers Active &bull; 84 Free Models &bull; Instant Access</span>
               </div>
               <div className="flex items-center gap-2 my-2 text-mute text-xs">
                 <hr className="flex-1 border-line" />
