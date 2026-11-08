@@ -39,22 +39,39 @@ class RoutingContext:
         """Construct a validated RoutingContext from an OpenAI-compatible chat completion request."""
         raw_model = request.model.strip()
         clean_model = raw_model.lower()
-        is_explicit = ":" in raw_model
 
         explicit_provider = None
         explicit_model_id = None
         alias = None
+        is_explicit = False
 
         valid_aliases = {"auto", "fast", "smart", "cheap"}
+        known_providers = {
+            "gemini",
+            "groq",
+            "openrouter",
+            "google",
+            "google-gemini",
+            "google_gemini",
+        }
 
-        if is_explicit:
+        if ":" in raw_model:
             parts = raw_model.split(":", 1)
-            explicit_provider = parts[0].strip().lower()
-            explicit_model_id = parts[1].strip()
+            candidate_provider = parts[0].strip().lower()
+            if candidate_provider in known_providers:
+                is_explicit = True
+                explicit_provider = candidate_provider
+                explicit_model_id = parts[1].strip()
+            elif clean_model in valid_aliases:
+                alias = clean_model
+            else:
+                is_explicit = True
+                explicit_provider = None
+                explicit_model_id = raw_model
         elif clean_model in valid_aliases:
             alias = clean_model
         else:
-            # Bare model ID without provider prefix (e.g. 'llama-3.3-70b-versatile' or canonical ID)
+            # Bare model ID without provider prefix (e.g. 'llama-3.3-70b-versatile' or 'openai/gpt-4o')
             is_explicit = True
             explicit_provider = None
             explicit_model_id = raw_model

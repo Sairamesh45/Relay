@@ -19,6 +19,7 @@ from app.providers.exceptions import (
     ProviderError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    QuotaExhaustedError,
     RateLimitError,
 )
 
@@ -325,11 +326,13 @@ def classify_provider_error(
     )
     is_quota_exhausted = (
         effective_status == 402
+        or isinstance(error, QuotaExhaustedError)
         or "insufficient credits" in body_str_lower
         or "insufficient_quota" in body_str_lower
         or ("quota exceeded" in raw_body_text.lower() and not is_transient_rate_limit)
         or "exceeded your current quota" in body_str_lower
         or "credit balance" in body_str_lower
+        or "credit balance is exhausted" in body_str_lower
     )
     if is_quota_exhausted and not is_transient_rate_limit:
         return ClassifiedError(
@@ -338,7 +341,7 @@ def classify_provider_error(
             provider=prov,
             status_code=effective_status or 402,
             message=sanitized_msg
-            or "Upstream provider quota or credit balance exhausted",
+            or "Upstream provider quota or credit balance exhausted (HTTP 402 Payment Required)",
             retry_after=retry_after,
             details={"reason": "quota_exhausted"},
             raw_error_type=raw_type,

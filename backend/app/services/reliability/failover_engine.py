@@ -660,11 +660,17 @@ class FailoverExecutionEngine:
 
                 # Non-retryable check: halt immediately on client or auth errors
                 if not effective_retry_policy.is_retryable(classified.category):
-                    logger.info(
-                        "Non-retryable error '%s' encountered; stopping failover pipeline.",
-                        classified.category,
-                    )
-                    break
+                    if classified.category == ErrorCategory.QUOTA_EXHAUSTED:
+                        logger.info(
+                            "Candidate %s quota/credit exhausted; attempting failover to next candidate.",
+                            cand.provider,
+                        )
+                    else:
+                        logger.info(
+                            "Non-retryable error '%s' encountered; stopping failover pipeline.",
+                            classified.category,
+                        )
+                        break
 
             # Backoff before next attempt
             if attempt_number < max_attempts:
@@ -1042,7 +1048,13 @@ class FailoverExecutionEngine:
                 )
 
                 if not effective_retry_policy.is_retryable(classified.category):
-                    break
+                    if classified.category == ErrorCategory.QUOTA_EXHAUSTED:
+                        logger.info(
+                            "Pre-chunk quota exhausted on %s; attempting failover to next candidate.",
+                            cand.provider,
+                        )
+                    else:
+                        break
 
             finally:
                 if cand_probe_reserved and not stream_completed:

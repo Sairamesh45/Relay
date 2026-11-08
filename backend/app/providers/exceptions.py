@@ -40,6 +40,12 @@ class RateLimitError(ProviderError):
     pass
 
 
+class QuotaExhaustedError(ProviderError):
+    """Raised when provider credit balance is exhausted or payment is required (HTTP 402)."""
+
+    pass
+
+
 class ProviderUnavailableError(ProviderError):
     """Raised when provider service is down, overloaded, or unreachable (HTTP 5xx/Connection errors)."""
 

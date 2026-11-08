@@ -19,6 +19,7 @@ from app.models.virtual_api_key import VirtualAPIKey
 from app.providers.exceptions import (
     InvalidCredentialsError,
     ProviderUnavailableError,
+    QuotaExhaustedError,
     RateLimitError,
 )
 from app.schemas.chat import (
@@ -369,6 +370,77 @@ class TestFailoverEngine:
         assert trace.attempts[1].provider == "gemini"
 
     # --------------------------------------------------------------------------
+    # 4b. Quota Exhaustion Failover: 402 on Provider A fails over to Provider B
+    # --------------------------------------------------------------------------
+    @pytest.mark.asyncio
+    async def test_quota_exhausted_fails_over_to_next_candidate(
+        self,
+        test_context: tuple[User, VirtualAPIKey, VirtualKeyRoutingPolicy],
+        mock_db: AsyncMock,
+    ) -> None:
+        """When OpenRouter returns 402 QuotaExhaustedError, engine automatically fails over to Groq."""
+        user, key, policy = test_context
+        cred_or = uuid.uuid4()
+        cred_groq = uuid.uuid4()
+
+        c1 = make_dummy_scored_candidate("openrouter", "llama-70b", cred_or, score=0.95)
+        c2 = make_dummy_scored_candidate("groq", "llama-70b", cred_groq, score=0.90)
+
+        mock_routing = MagicMock()
+        mock_routing.get_ranked_candidates = AsyncMock(return_value=[c1, c2])
+
+        mock_cred_pool = MagicMock()
+        mock_cred_pool.decrypt_credential = AsyncMock(
+            side_effect=["key-openrouter", "key-groq"]
+        )
+
+        or_adapter = MagicMock()
+        or_adapter.create_chat_completion = AsyncMock(
+            side_effect=QuotaExhaustedError(
+                message="Provider account credit balance is exhausted (HTTP 402 Payment Required)",
+                provider="openrouter",
+                status_code=402,
+            )
+        )
+
+        mock_resp = MagicMock(spec=ChatCompletionResponse, usage=None)
+        groq_adapter = MagicMock()
+        groq_adapter.create_chat_completion = AsyncMock(return_value=mock_resp)
+
+        mock_prov_mgr = MagicMock()
+        mock_prov_mgr.get_provider = MagicMock(
+            side_effect=lambda p: or_adapter if p == "openrouter" else groq_adapter
+        )
+
+        engine = FailoverExecutionEngine(
+            routing_engine=mock_routing,
+            provider_manager=mock_prov_mgr,
+            credential_pool=mock_cred_pool,
+            usage_service=MagicMock(record_request=AsyncMock()),
+            retry_budget_enforcer=RetryBudgetEnforcer(),
+        )
+
+        chat_req = ChatCompletionRequest(
+            model="auto", messages=[ChatMessage(role="user", content="Hi")]
+        )
+
+        response, trace = await engine.execute_chat_completion(
+            db=mock_db,
+            user=user,
+            key=key,
+            request=chat_req,
+            request_id="req-quota-failover",
+            policy=policy,
+        )
+
+        assert response == mock_resp
+        assert trace.total_attempts == 2
+        assert trace.attempts[0].provider == "openrouter"
+        assert trace.attempts[0].error_category.lower() == "quota_exhausted"
+        assert trace.attempts[1].provider == "groq"
+        assert trace.attempts[1].status == "success"
+
+    # --------------------------------------------------------------------------
     # 5. Non-Retryable Error Rule: 401 Auth Failure Halts Execution
     # --------------------------------------------------------------------------
     @pytest.mark.asyncio
@@ -559,6 +631,80 @@ class TestFailoverEngine:
         assert "Hello" in received_chunks[0]
         assert "world" in received_chunks[1]
         assert received_chunks[2] == "data: [DONE]\n\n"
+
+    @pytest.mark.asyncio
+    async def test_streaming_quota_exhausted_pre_chunk_fails_over(
+        self,
+        test_context: tuple[User, VirtualAPIKey, VirtualKeyRoutingPolicy],
+        mock_db: AsyncMock,
+    ) -> None:
+        """Streaming pre-chunk QuotaExhaustedError (402) cleanly fails over to next candidate."""
+        user, key, policy = test_context
+        cred1 = uuid.uuid4()
+        cred2 = uuid.uuid4()
+
+        c1 = make_dummy_scored_candidate("openrouter", "llama-70b", cred1, score=0.95)
+        c2 = make_dummy_scored_candidate("groq", "llama-70b", cred2, score=0.90)
+
+        mock_routing = MagicMock(get_ranked_candidates=AsyncMock(return_value=[c1, c2]))
+
+        # Adapter 1 raises QuotaExhaustedError pre-chunk
+        async def failing_quota_gen(*args: Any, **kwargs: Any) -> Any:
+            raise QuotaExhaustedError(
+                message="Provider account credit balance is exhausted (HTTP 402 Payment Required)",
+                provider="openrouter",
+                status_code=402,
+            )
+            yield  # pragma: no cover
+
+        chunk1 = MagicMock(
+            model_dump_json=lambda: '{"choices":[{"delta":{"content":"Hi from Groq"}}]}',
+            usage=None,
+        )
+
+        async def success_gen(*args: Any, **kwargs: Any) -> Any:
+            yield chunk1
+
+        openrouter_adapter = MagicMock()
+        openrouter_adapter.stream_chat_completion = MagicMock(side_effect=lambda **kw: failing_quota_gen())
+        groq_adapter = MagicMock()
+        groq_adapter.stream_chat_completion = MagicMock(side_effect=lambda **kw: success_gen())
+
+        mock_prov_mgr = MagicMock()
+        mock_prov_mgr.get_provider = MagicMock(
+            side_effect=lambda p: openrouter_adapter if p == "openrouter" else groq_adapter
+        )
+
+        engine = FailoverExecutionEngine(
+            routing_engine=mock_routing,
+            provider_manager=mock_prov_mgr,
+            credential_pool=MagicMock(
+                decrypt_credential=AsyncMock(return_value="valid-key")
+            ),
+            usage_service=MagicMock(record_request=AsyncMock()),
+            retry_budget_enforcer=RetryBudgetEnforcer(),
+        )
+
+        chat_req = ChatCompletionRequest(
+            model="auto",
+            messages=[ChatMessage(role="user", content="Hi")],
+            stream=True,
+        )
+
+        received_chunks: list[str] = []
+        async for chunk in engine.execute_stream_chat_completion(
+            db=mock_db,
+            user=user,
+            key=key,
+            request=chat_req,
+            request_id="req-stream-quota-prechunk",
+            policy=policy,
+        ):
+            received_chunks.append(chunk)
+
+        assert len(received_chunks) == 2
+        assert "Hi from Groq" in received_chunks[0]
+        assert received_chunks[1] == "data: [DONE]\n\n"
 
     @pytest.mark.asyncio
     async def test_streaming_post_chunk_terminal_error_event(

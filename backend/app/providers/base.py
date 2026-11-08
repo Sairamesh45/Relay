@@ -1,5 +1,6 @@
 """Abstract Base Provider interface for AI provider integrations."""
 
+import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -10,8 +11,10 @@ import httpx
 from app.core.config import get_settings
 from app.providers.exceptions import (
     InvalidCredentialsError,
+    ProviderRequestError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    QuotaExhaustedError,
     RateLimitError,
 )
 from app.providers.schemas.model import UnifiedModel
@@ -155,6 +158,55 @@ class BaseProvider(ABC):
                 status_code=response.status_code,
             )
 
+        if response.status_code == 402:
+            body_msg = ""
+            try:
+                body_json = response.json()
+                if isinstance(body_json, dict) and "error" in body_json:
+                    err_obj = body_json["error"]
+                    body_msg = (
+                        err_obj.get("message", "")
+                        if isinstance(err_obj, dict)
+                        else str(err_obj)
+                    )
+            except Exception:
+                pass
+            msg = (
+                body_msg
+                or "Provider account credit balance is exhausted (HTTP 402 Payment Required)"
+            )
+            raise QuotaExhaustedError(
+                msg,
+                provider=self.provider_id,
+                status_code=402,
+            )
+
+        if response.status_code in (400, 422):
+            body_msg = ""
+            try:
+                body_json = response.json()
+                if isinstance(body_json, dict) and "error" in body_json:
+                    err_obj = body_json["error"]
+                    body_msg = (
+                        err_obj.get("message", "")
+                        if isinstance(err_obj, dict)
+                        else str(err_obj)
+                    )
+            except Exception:
+                pass
+            raise ProviderRequestError(
+                body_msg or f"Bad request to provider: {response.status_code}",
+                provider=self.provider_id,
+                status_code=response.status_code,
+            )
+
+        if response.status_code == 404:
+            raise ProviderRequestError(
+                f"Requested model or resource not found on provider ({response.status_code})",
+                provider=self.provider_id,
+                status_code=404,
+            )
+
         if response.status_code == 429:
             retry_after: float | None = None
             retry_header = response.headers.get("retry-after")
@@ -215,6 +267,57 @@ class BaseProvider(ABC):
                 "Authentication failed: invalid or unauthorized API key",
                 provider=self.provider_id,
                 status_code=response.status_code,
+            )
+
+        if response.status_code == 402:
+            body_msg = ""
+            try:
+                content = await response.aread()
+                body_json = json.loads(content)
+                if isinstance(body_json, dict) and "error" in body_json:
+                    err_obj = body_json["error"]
+                    body_msg = (
+                        err_obj.get("message", "")
+                        if isinstance(err_obj, dict)
+                        else str(err_obj)
+                    )
+            except Exception:
+                pass
+            msg = (
+                body_msg
+                or "Provider account credit balance is exhausted (HTTP 402 Payment Required)"
+            )
+            raise QuotaExhaustedError(
+                msg,
+                provider=self.provider_id,
+                status_code=402,
+            )
+
+        if response.status_code in (400, 422):
+            body_msg = ""
+            try:
+                content = await response.aread()
+                body_json = json.loads(content)
+                if isinstance(body_json, dict) and "error" in body_json:
+                    err_obj = body_json["error"]
+                    body_msg = (
+                        err_obj.get("message", "")
+                        if isinstance(err_obj, dict)
+                        else str(err_obj)
+                    )
+            except Exception:
+                pass
+            raise ProviderRequestError(
+                body_msg or f"Bad request to provider: {response.status_code}",
+                provider=self.provider_id,
+                status_code=response.status_code,
+            )
+
+        if response.status_code == 404:
+            raise ProviderRequestError(
+                f"Requested model or resource not found on provider ({response.status_code})",
+                provider=self.provider_id,
+                status_code=404,
             )
 
         if response.status_code == 429:
