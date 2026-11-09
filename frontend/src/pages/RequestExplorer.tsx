@@ -4,6 +4,7 @@ import { RequestList } from '@/components/requests/RequestList';
 import { RequestDetail } from '@/components/requests/RequestDetail';
 import { RequestLogItem } from '@/types';
 import { api } from '@/api/client';
+import { useVisibilityInterval } from '@/hooks/useVisibilityInterval';
 
 interface RequestExplorerProps {
   initialRequests?: RequestLogItem[];
@@ -66,19 +67,22 @@ export const RequestExplorer: React.FC<RequestExplorerProps> = ({ initialRequest
   useEffect(() => {
     isMountedRef.current = true;
     if (initialRequests) return;
-
     loadRequests(false);
-
-    // Auto-polling every 4 seconds for live traffic updates
-    const interval = setInterval(() => {
-      loadRequests(true);
-    }, 4000);
-
     return () => {
       isMountedRef.current = false;
-      clearInterval(interval);
     };
   }, [initialRequests, loadRequests]);
+
+  // Auto-polling with visibility awareness (10s cadence)
+  useVisibilityInterval(
+    () => {
+      if (isMountedRef.current) {
+        loadRequests(true);
+      }
+    },
+    10000,
+    !initialRequests
+  );
 
   const filteredRequests = requests.filter((r) => {
     const matchesSearch =

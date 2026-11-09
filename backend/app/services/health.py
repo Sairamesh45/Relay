@@ -21,12 +21,15 @@ class HealthService:
         }
 
     async def check_database(self) -> bool:
-        """Verify PostgreSQL connectivity by executing a lightweight SELECT 1 query."""
+        """Verify PostgreSQL connectivity with a 2.0s timeout, avoiding redundant pinging."""
         try:
             engine = get_engine()
-            async with asyncio.timeout(6.0):
+            async with asyncio.timeout(2.0):
                 async with engine.connect() as conn:
-                    await conn.execute(text("SELECT 1"))
+                    sync_pool = getattr(engine.sync_engine, "pool", None)
+                    pre_ping_enabled = getattr(sync_pool, "_pre_ping", False)
+                    if not pre_ping_enabled:
+                        await conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
             logger.warning("Database health check failed: %s", type(e).__name__)

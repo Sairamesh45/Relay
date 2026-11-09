@@ -5,6 +5,7 @@ import { TokenMetrics } from '@/components/analytics/TokenMetrics';
 import { CostBreakdown } from '@/components/analytics/CostBreakdown';
 import { VolumeTrends } from '@/components/analytics/VolumeTrends';
 import { api } from '@/api/client';
+import { useVisibilityInterval } from '@/hooks/useVisibilityInterval';
 
 interface AnalyticsProps {
   initialSummary?: any;
@@ -48,19 +49,22 @@ export const Analytics: React.FC<AnalyticsProps> = ({ initialSummary }) => {
   useEffect(() => {
     isMountedRef.current = true;
     if (initialSummary) return;
-
     loadUsage(false);
-
-    // Auto-polling every 5 seconds for live usage analytics
-    const interval = setInterval(() => {
-      loadUsage(true);
-    }, 5000);
-
     return () => {
       isMountedRef.current = false;
-      clearInterval(interval);
     };
   }, [initialSummary, loadUsage]);
+
+  // Auto-polling with visibility awareness (20s cadence)
+  useVisibilityInterval(
+    () => {
+      if (isMountedRef.current) {
+        loadUsage(true);
+      }
+    },
+    20000,
+    !initialSummary
+  );
 
   const totalRequests = summaryData?.total_requests ?? 0;
   const inputTokens = summaryData?.total_input_tokens ?? 0;

@@ -137,35 +137,40 @@ class ModelRegistryService:
                 items=[],
             )
 
-        # Fetch canonical models with eager loaded offerings
-        fetch_stmt = (
-            select(UnifiedModel)
-            .where(UnifiedModel.id.in_(paged_ids))
-            .options(selectinload(UnifiedModel.provider_models))
+        # Fetch canonical models for paged IDs
+        um_stmt = select(UnifiedModel).where(UnifiedModel.id.in_(paged_ids))
+        um_res = await db.execute(um_stmt)
+        raw_unified_models = um_res.scalars().all()
+
+        # Fetch provider offerings strictly scoped to user credentials and paged canonical models
+        pm_stmt = select(ProviderModel).where(
+            ProviderModel.unified_model_id.in_(paged_ids),
+            ProviderModel.credential_id.in_(user_cred_ids),
         )
-        res = await db.execute(fetch_stmt)
-        raw_unified_models = res.scalars().all()
+        if provider:
+            pm_stmt = pm_stmt.where(ProviderModel.provider == provider.strip().lower())
+        if availability_status and availability_status.lower() != "all":
+            pm_stmt = pm_stmt.where(
+                ProviderModel.availability_status == availability_status.lower()
+            )
+        pm_res = await db.execute(pm_stmt)
+        user_pms = pm_res.scalars().all()
+
+        pms_by_um: dict[uuid.UUID, list[ProviderModel]] = {}
+        for pm in user_pms:
+            pms_by_um.setdefault(pm.unified_model_id, []).append(pm)
 
         # Preserve the deterministic canonical_id pagination order
         um_map = {um.id: um for um in raw_unified_models}
         ordered_unified_models = [um_map[uid] for uid in paged_ids if uid in um_map]
 
-        # Build response items filtering offerings strictly to user's credentials
+        # Build response items strictly using scoped user offerings
         items: list[UnifiedModelRead] = []
         for um in ordered_unified_models:
-            user_offerings: list[ProviderOfferingRead] = []
-            for pm in um.provider_models:
-                if pm.credential_id in user_cred_ids:
-                    if (
-                        availability_status
-                        and availability_status.lower() != "all"
-                        and pm.availability_status != availability_status.lower()
-                    ):
-                        continue
-                    if provider and pm.provider != provider.strip().lower():
-                        continue
-
-                    user_offerings.append(ProviderOfferingRead.model_validate(pm))
+            user_offerings: list[ProviderOfferingRead] = [
+                ProviderOfferingRead.model_validate(pm)
+                for pm in pms_by_um.get(um.id, [])
+            ]
 
             if user_offerings:
                 items.append(

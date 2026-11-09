@@ -103,4 +103,7 @@ class ProviderCredential(Base):
             name="uq_user_provider_credential_fingerprint",
         ),
         Index("ix_provider_credentials_user_provider", "user_id", "provider"),
+        Index("ix_provider_credentials_user_status", "user_id", "status"),
+        Index("ix_provider_credentials_user_created", "user_id", "created_at"),
     )
+

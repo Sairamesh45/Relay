@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.gateway_request_log import GatewayRequestLog
@@ -76,47 +76,84 @@ class GatewayUsageService:
         provider: str | None = None,
     ) -> GatewayUsageSummaryResponse:
         """Compute aggregated usage statistics strictly for the authenticated user."""
-        stmt = select(GatewayRequestLog).where(GatewayRequestLog.user_id == user.id)
+        base_filter = [GatewayRequestLog.user_id == user.id]
         if provider:
-            stmt = stmt.where(GatewayRequestLog.provider == provider.strip().lower())
+            base_filter.append(GatewayRequestLog.provider == provider.strip().lower())
 
-        res = await db.execute(stmt)
-        logs = list(res.scalars().all())
+        # 1. Overall totals using func.count(), func.sum(), func.avg()
+        totals_stmt = select(
+            func.count(GatewayRequestLog.id).label("total_requests"),
+            func.sum(
+                case((GatewayRequestLog.status == "success", 1), else_=0)
+            ).label("successful_requests"),
+            func.sum(
+                case((GatewayRequestLog.status != "success", 1), else_=0)
+            ).label("failed_requests"),
+            func.coalesce(func.sum(GatewayRequestLog.input_tokens), 0).label(
+                "total_input_tokens"
+            ),
+            func.coalesce(func.sum(GatewayRequestLog.output_tokens), 0).label(
+                "total_output_tokens"
+            ),
+            func.coalesce(func.sum(GatewayRequestLog.total_tokens), 0).label(
+                "total_tokens"
+            ),
+            func.coalesce(func.avg(GatewayRequestLog.latency_ms), 0.0).label("avg_lat"),
+        ).where(*base_filter)
 
-        total_requests = len(logs)
-        successful = sum(1 for log in logs if log.status == "success")
-        failed = sum(1 for log in logs if log.status != "success")
-        total_in = sum(log.input_tokens or 0 for log in logs)
-        total_out = sum(log.output_tokens or 0 for log in logs)
-        total_tok = sum(log.total_tokens or 0 for log in logs)
-        avg_lat = (
-            sum(log.latency_ms for log in logs) / total_requests
-            if total_requests > 0
-            else 0.0
+        totals_res = await db.execute(totals_stmt)
+        totals_row = totals_res.one()
+
+        total_requests = int(totals_row.total_requests or 0)
+        successful = int(totals_row.successful_requests or 0)
+        failed = int(totals_row.failed_requests or 0)
+        total_in = int(totals_row.total_input_tokens or 0)
+        total_out = int(totals_row.total_output_tokens or 0)
+        total_tok = int(totals_row.total_tokens or 0)
+        avg_lat = float(totals_row.avg_lat or 0.0)
+
+        # 2. Provider breakdown using GROUP BY GatewayRequestLog.provider
+        prov_stmt = (
+            select(
+                GatewayRequestLog.provider,
+                func.count(GatewayRequestLog.id).label("total_requests"),
+                func.coalesce(func.sum(GatewayRequestLog.total_tokens), 0).label(
+                    "total_tokens"
+                ),
+                func.coalesce(func.sum(GatewayRequestLog.input_tokens), 0).label(
+                    "input_tokens"
+                ),
+                func.coalesce(func.sum(GatewayRequestLog.output_tokens), 0).label(
+                    "output_tokens"
+                ),
+            )
+            .where(*base_filter)
+            .group_by(GatewayRequestLog.provider)
         )
-
-        by_prov: dict[str, dict[str, int]] = {}
-        by_model: dict[str, int] = {}
-
-        for log in logs:
-            p = log.provider
-            if p not in by_prov:
-                by_prov[p] = {
-                    "total_requests": 0,
-                    "total_tokens": 0,
-                    "input_tokens": 0,
-                    "output_tokens": 0,
-                }
-            by_prov[p]["total_requests"] += 1
-            by_prov[p]["total_tokens"] += log.total_tokens or 0
-            by_prov[p]["input_tokens"] += log.input_tokens or 0
-            by_prov[p]["output_tokens"] += log.output_tokens or 0
-
-            m = log.gateway_model_id
-            by_model[m] = by_model.get(m, 0) + 1
-
+        prov_res = await db.execute(prov_stmt)
         provider_metrics = {
-            p: ProviderUsageMetrics(**data) for p, data in by_prov.items()
+            p_row.provider: ProviderUsageMetrics(
+                total_requests=int(p_row.total_requests or 0),
+                total_tokens=int(p_row.total_tokens or 0),
+                input_tokens=int(p_row.input_tokens or 0),
+                output_tokens=int(p_row.output_tokens or 0),
+            )
+            for p_row in prov_res.all()
+        }
+
+        # 3. Model breakdown using GROUP BY GatewayRequestLog.gateway_model_id
+        model_stmt = (
+            select(
+                GatewayRequestLog.gateway_model_id,
+                func.count(GatewayRequestLog.id).label("total_requests"),
+            )
+            .where(*base_filter)
+            .group_by(GatewayRequestLog.gateway_model_id)
+        )
+        model_res = await db.execute(model_stmt)
+        by_model = {
+            m_row.gateway_model_id: int(m_row.total_requests or 0)
+            for m_row in model_res.all()
         }
 
         return GatewayUsageSummaryResponse(

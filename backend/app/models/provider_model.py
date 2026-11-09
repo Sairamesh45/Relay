@@ -182,4 +182,11 @@ class ProviderModel(Base):
             unique=True,
             postgresql_where=text("credential_id IS NULL"),
         ),
+        Index(
+            "ix_provider_models_cred_avail_unified",
+            "credential_id",
+            "availability_status",
+            "unified_model_id",
+        ),
     )
+

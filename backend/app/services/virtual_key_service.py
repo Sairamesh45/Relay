@@ -10,9 +10,10 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.core.config import get_settings
+from app.core.timing import get_current_timing_context
 from app.models.routing_policy import VirtualKeyRoutingPolicy
 from app.models.user import User
 from app.models.virtual_api_key import VirtualAPIKey
@@ -203,23 +204,40 @@ class VirtualKeyService:
         Validates key structure, constant-time HMAC digest, revocation, and expiration.
         Updates last_used_at asynchronously.
         """
+        timing = get_current_timing_context()
+        if timing:
+            async with timing.measure("auth"):
+                return await self._authenticate_key_impl(db, raw_key, timing)
+        return await self._authenticate_key_impl(db, raw_key, None)
+
+    async def _authenticate_key_impl(
+        self,
+        db: AsyncSession,
+        raw_key: str,
+        timing: Any,
+    ) -> tuple[VirtualAPIKey, User]:
         clean_key = raw_key.strip()
         if not clean_key.startswith(self.KEY_PREFIX) or len(clean_key) < 30:
             raise InvalidVirtualKeyError("Invalid API key format.")
 
         computed_hash = self.hash_key(clean_key)
 
-        # Lookup key by hash with eager-loaded user
+        # Lookup key by hash with joined user and routing policy in 1 SQL query
         stmt = (
             select(VirtualAPIKey)
             .where(VirtualAPIKey.key_hash == computed_hash)
             .options(
-                selectinload(VirtualAPIKey.user),
-                selectinload(VirtualAPIKey.routing_policy),
+                joinedload(VirtualAPIKey.user),
+                joinedload(VirtualAPIKey.routing_policy),
             )
         )
-        res = await db.execute(stmt)
-        key = res.scalar_one_or_none()
+        if timing:
+            async with timing.measure("db"):
+                res = await db.execute(stmt)
+                key = res.unique().scalar_one_or_none()
+        else:
+            res = await db.execute(stmt)
+            key = res.unique().scalar_one_or_none()
 
         if key is None:
             raise InvalidVirtualKeyError("Invalid API key provided.")
@@ -237,7 +255,11 @@ class VirtualKeyService:
 
         # Update last_used_at safely
         key.last_used_at = now
-        await db.commit()
+        if timing:
+            async with timing.measure("db"):
+                await db.commit()
+        else:
+            await db.commit()
 
         return key, key.user
 

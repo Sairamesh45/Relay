@@ -5,6 +5,7 @@ import { Sparkline } from '@/components/ui/Sparkline';
 import { Pill } from '@/components/ui/Pill';
 import { api } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
+import { useVisibilityInterval } from '@/hooks/useVisibilityInterval';
 
 export interface LiveFeedItem {
   time: string;
@@ -117,14 +118,14 @@ export const Overview: React.FC<OverviewProps> = ({
     fetchData();
   }, [fetchData, initialSummary, initialReliability, initialFeed]);
 
-  // Live polling for real updates when active
-  useEffect(() => {
-    if (!isLiveActive || initialSummary || initialReliability || initialFeed) return;
-    const interval = setInterval(() => {
+  // Live polling for real updates when active (20s visibility-aware cadence)
+  useVisibilityInterval(
+    () => {
       fetchData();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isLiveActive, fetchData, initialSummary, initialReliability, initialFeed]);
+    },
+    20000,
+    isLiveActive && !initialSummary && !initialReliability && !initialFeed
+  );
 
   // Dynamic subtitle based on live backend state
   const getSubtitle = () => {

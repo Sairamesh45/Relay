@@ -135,4 +135,23 @@ class GatewayRequestLog(Base):
     __table_args__ = (
         Index("ix_gateway_logs_user_created", "user_id", "created_at"),
         Index("ix_gateway_logs_key_created", "virtual_api_key_id", "created_at"),
+        Index(
+            "ix_gateway_logs_user_provider_created",
+            "user_id",
+            "provider",
+            "created_at",
+        ),
+        Index(
+            "ix_gateway_logs_user_status_created",
+            "user_id",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "ix_gateway_logs_user_cred_created",
+            "user_id",
+            "provider_credential_id",
+            "created_at",
+        ),
     )
+

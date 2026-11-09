@@ -108,4 +108,6 @@ class VirtualAPIKey(Base):
     __table_args__ = (
         Index("ix_virtual_api_keys_prefix_active", "key_prefix", "is_active"),
         Index("ix_virtual_api_keys_user_active", "user_id", "is_active"),
+        Index("ix_virtual_api_keys_user_created", "user_id", "created_at"),
     )
+

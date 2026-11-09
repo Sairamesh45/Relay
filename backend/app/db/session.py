@@ -1,5 +1,6 @@
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from redis.asyncio import Redis, from_url
 from sqlalchemy.ext.asyncio import (
@@ -25,14 +26,20 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
-        _engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=settings.DEBUG and settings.APP_ENV == "development",
-            pool_pre_ping=True,
-            pool_recycle=300,
-            pool_size=10,
-            max_overflow=20,
-        )
+        engine_kwargs: dict[str, Any] = {
+            "echo": settings.DEBUG and settings.APP_ENV == "development",
+            "pool_pre_ping": True,
+            "pool_recycle": settings.DB_POOL_RECYCLE,
+        }
+        if "sqlite" not in settings.DATABASE_URL:
+            engine_kwargs.update(
+                {
+                    "pool_size": settings.DB_POOL_SIZE,
+                    "max_overflow": settings.DB_MAX_OVERFLOW,
+                    "pool_timeout": settings.DB_POOL_TIMEOUT,
+                }
+            )
+        _engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
     return _engine
 
 

@@ -15,6 +15,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -93,6 +94,9 @@ class CredentialHealth(Base):
     """Tracks operational health, consecutive failure counts, and cooldown windows for a provider credential."""
 
     __tablename__ = "credential_healths"
+    __table_args__ = (
+        Index("ix_credential_healths_status_updated", "health_status", "updated_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -234,6 +238,17 @@ class QuotaState(Base):
     """Tracks observed rate-limit and quota metrics across credentials, models, and providers."""
 
     __tablename__ = "quota_states"
+    __table_args__ = (
+        Index(
+            "ix_quota_states_lookup",
+            "credential_id",
+            "provider",
+            "quota_scope",
+            "resource_type",
+            "model_id",
+        ),
+        Index("ix_quota_states_cred_observed", "credential_id", "observed_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -517,6 +532,11 @@ class ReliabilityEvent(Base):
     """Immutable audit trail of reliability and automatic failover events."""
 
     __tablename__ = "reliability_events"
+    __table_args__ = (
+        Index("ix_reliability_events_cred_timestamp", "credential_id", "timestamp"),
+        Index("ix_reliability_events_prov_timestamp", "provider", "timestamp"),
+        Index("ix_reliability_events_type_timestamp", "event_type", "timestamp"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

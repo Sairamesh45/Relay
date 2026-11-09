@@ -1,5 +1,7 @@
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,7 @@ from app.api.routes.gateway import gateway_router
 from app.core.config import get_settings
 from app.core.gateway_errors import OpenAIHTTPException
 from app.core.logging import logger, setup_logging
+from app.core.timing import RequestTimingContext, current_timing_context
 from app.db.session import close_db_engine, redis_manager
 
 settings = get_settings()
@@ -50,7 +53,32 @@ def create_application() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["Server-Timing"],
         )
+
+    @app.middleware("http")
+    async def server_timing_middleware(request: Request, call_next: Any) -> Any:
+        timing = RequestTimingContext()
+        request.state.timing = timing
+        token = current_timing_context.set(timing)
+        start_time = time.perf_counter()
+        try:
+            response = await call_next(request)
+            total_ms = (time.perf_counter() - start_time) * 1000
+            timing.durations["total"] = round(total_ms, 2)
+
+            if timing.durations.get("proc", 0.0) == 0.0:
+                accounted = timing.durations.get("auth", 0.0) + timing.durations.get(
+                    "db", 0.0
+                )
+                timing.durations["proc"] = max(0.0, round(total_ms - accounted, 2))
+
+            header_value = timing.format_server_timing_header()
+            if header_value:
+                response.headers["Server-Timing"] = header_value
+            return response
+        finally:
+            current_timing_context.reset(token)
 
     @app.exception_handler(OpenAIHTTPException)
     async def openai_http_exception_handler(

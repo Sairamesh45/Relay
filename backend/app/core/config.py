@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     )
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Database Connection Pool Configuration
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT: float = 10.0
+    DB_POOL_RECYCLE: int = 300
+
     LOG_LEVEL: str = "INFO"
 
     CORS_ORIGINS: list[str] = [

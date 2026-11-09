@@ -367,12 +367,16 @@ class EventRecorder:
         user_id: uuid.UUID,
     ) -> dict[str, Any]:
         """Aggregate reliability metrics and KPIs for the authenticated user."""
-        # User credentials
-        user_cred_stmt = select(ProviderCredential.id).where(
-            ProviderCredential.user_id == user_id
-        )
+        # User credentials and providers
+        user_cred_stmt = select(
+            ProviderCredential.id, ProviderCredential.provider
+        ).where(ProviderCredential.user_id == user_id)
         user_cred_res = await db.execute(user_cred_stmt)
-        user_cred_ids = list(user_cred_res.scalars().all())
+        user_cred_rows = user_cred_res.all()
+        user_cred_ids = [row[0] for row in user_cred_rows]
+        user_providers = list(
+            {row[1].lower().strip() for row in user_cred_rows if row[1]}
+        )
 
         # Total requests from GatewayRequestLog
         req_count_stmt = select(func.count(GatewayRequestLog.id)).where(
@@ -381,25 +385,36 @@ class EventRecorder:
         req_res = await db.execute(req_count_stmt)
         total_requests = req_res.scalar_one() or 0
 
-        # Event counts
-        event_cond = []
-        if user_cred_ids:
-            event_cond.append(
-                (ReliabilityEvent.credential_id.in_(user_cred_ids))
-                | (ReliabilityEvent.credential_id.is_(None))
+        # Tenant isolation guard: if user has no credentials, return zero metrics immediately
+        if not user_cred_ids:
+            return {
+                "total_requests": total_requests,
+                "failover_success_count": 0,
+                "failover_started_count": 0,
+                "failover_events_count": 0,
+                "failover_success_rate": 100.0,
+                "circuit_trip_count": 0,
+                "active_cooldowns_count": 0,
+                "open_circuits_count": 0,
+                "provider_stats": {},
+            }
+
+        # Event counts scoped strictly to user credentials and configured providers
+        events_stmt = (
+            select(
+                ReliabilityEvent.event_type,
+                ReliabilityEvent.provider,
+                func.count(ReliabilityEvent.id),
             )
-
-        events_stmt = select(
-            ReliabilityEvent.event_type,
-            ReliabilityEvent.provider,
-            func.count(ReliabilityEvent.id),
+            .where(
+                (ReliabilityEvent.credential_id.in_(user_cred_ids))
+                | (
+                    ReliabilityEvent.credential_id.is_(None)
+                    & ReliabilityEvent.provider.in_(user_providers)
+                )
+            )
+            .group_by(ReliabilityEvent.event_type, ReliabilityEvent.provider)
         )
-        if event_cond:
-            events_stmt = events_stmt.where(*event_cond)
-        events_stmt = events_stmt.group_by(
-            ReliabilityEvent.event_type, ReliabilityEvent.provider
-        )
-
         events_res = await db.execute(events_stmt)
         event_rows = events_res.all()
 
@@ -417,20 +432,27 @@ class EventRecorder:
             if ev_type == ReliabilityEventType.CIRCUIT_OPENED.value:
                 circuit_trip_count += cnt
 
-        # Active cooldowns count
+        # Active cooldowns count scoped to user credentials
         now = datetime.now(UTC)
         cooldown_stmt = select(func.count(CredentialHealth.id)).where(
-            CredentialHealth.credential_id.in_(user_cred_ids)
-            if user_cred_ids
-            else False,
+            CredentialHealth.credential_id.in_(user_cred_ids),
             CredentialHealth.cooldown_until > now,
         )
         cd_res = await db.execute(cooldown_stmt)
-        active_cooldowns_count = cd_res.scalar_one() if user_cred_ids else 0
+        active_cooldowns_count = cd_res.scalar_one() or 0
 
-        # Open circuits count
+        # Open circuits count scoped to user's credentials or providers
+        cred_id_strs = [str(cid) for cid in user_cred_ids]
         circuit_stmt = select(func.count(CircuitBreakerState.id)).where(
-            CircuitBreakerState.state == CircuitState.OPEN
+            CircuitBreakerState.state == CircuitState.OPEN,
+            (
+                (CircuitBreakerState.scope_type == "credential")
+                & (CircuitBreakerState.scope_id.in_(cred_id_strs))
+            )
+            | (
+                (CircuitBreakerState.scope_type == "provider")
+                & (CircuitBreakerState.scope_id.in_(user_providers))
+            ),
         )
         circ_res = await db.execute(circuit_stmt)
         open_circuits_count = circ_res.scalar_one() or 0
