@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -44,6 +45,7 @@ export const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             <VercelAnalytics />
+            <SpeedInsights />
           </BrowserRouter>
         </ToastProvider>
       </AuthProvider>
