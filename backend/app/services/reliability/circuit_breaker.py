@@ -315,7 +315,10 @@ class CircuitBreakerEngine:
     ) -> None:
         """Decrement in-flight probe counter when a probe request completes or errors out."""
         state = await self.get_or_create_state(db, scope_type, scope_id)
-        if state.probe_requests_in_flight > 0:
+        if (
+            state.state == CircuitState.HALF_OPEN
+            and state.probe_requests_in_flight > 0
+        ):
             state.probe_requests_in_flight -= 1
             if db is not None:
                 await db.flush()

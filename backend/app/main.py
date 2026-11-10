@@ -14,6 +14,7 @@ from app.core.gateway_errors import OpenAIHTTPException
 from app.core.logging import logger, setup_logging
 from app.core.timing import RequestTimingContext, current_timing_context
 from app.db.session import close_db_engine, redis_manager
+from app.providers.manager import get_provider_manager
 
 settings = get_settings()
 
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 2. Shutdown
     logger.info("Initiating graceful shutdown for %s...", settings.APP_NAME)
+    await get_provider_manager().close()
     await redis_manager.close()
     await close_db_engine()
     logger.info("Application shutdown completed.")

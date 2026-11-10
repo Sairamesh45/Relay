@@ -577,12 +577,6 @@ class FailoverExecutionEngine:
                     credential_id=cand.credential_id,
                     model_id=cand.provider_model_id,
                 )
-                await self.circuit_breaker.release_candidate_probe(
-                    db=db,
-                    provider=cand.provider,
-                    credential_id=cand.credential_id,
-                    model_id=cand.provider_model_id,
-                )
 
             except Exception as exc:
                 latency_ms = (time.perf_counter() - attempt_start) * 1000
@@ -619,12 +613,6 @@ class FailoverExecutionEngine:
                         is_provider_wide=(
                             classified.category == ErrorCategory.PROVIDER_UNAVAILABLE
                         ),
-                    )
-                    await self.circuit_breaker.release_candidate_probe(
-                        db=db,
-                        provider=cand.provider,
-                        credential_id=cand.credential_id,
-                        model_id=cand.provider_model_id,
                     )
 
                     # Emit specific events
@@ -822,7 +810,6 @@ class FailoverExecutionEngine:
             if not probe_reserved:
                 continue
 
-            cand_probe_reserved = True
             stream_completed = False
             usage_recorded = False
 
@@ -947,8 +934,8 @@ class FailoverExecutionEngine:
                         "Failed to record streaming success state or audit log: %s", e
                     )
 
-                stream_completed = True
                 usage_recorded = True
+                stream_completed = True
                 return
 
             except (asyncio.CancelledError, GeneratorExit):
@@ -984,12 +971,6 @@ class FailoverExecutionEngine:
                         is_provider_wide=(
                             classified.category == ErrorCategory.PROVIDER_UNAVAILABLE
                         ),
-                    )
-                    await self.circuit_breaker.release_candidate_probe(
-                        db=db,
-                        provider=cand.provider,
-                        credential_id=cand.credential_id,
-                        model_id=cand.provider_model_id,
                     )
                 except Exception as e:
                     logger.warning("Failed to record streaming failure state: %s", e)
@@ -1057,7 +1038,7 @@ class FailoverExecutionEngine:
                         break
 
             finally:
-                if cand_probe_reserved and not stream_completed:
+                if probe_reserved and not stream_completed:
                     try:
                         await self.circuit_breaker.release_candidate_probe(
                             db=db,

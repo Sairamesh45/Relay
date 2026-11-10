@@ -132,6 +132,9 @@ DATABASE_URL="postgresql+asyncpg://gateway_user:password@aws-0-region.pooler.sup
 
 # Redis Cache Configuration
 REDIS_URL="redis://localhost:6379/0"
+# Use true in production so rate limiting never falls back to database row locks.
+RATE_LIMIT_REDIS_REQUIRED=false
+RATE_LIMIT_REDIS_KEY_PREFIX="relay:rate-limit"
 
 # Credential Vault Configuration (Phase 2)
 # Generate a 32-byte key: python -c "import secrets; print(secrets.token_hex(32))"
@@ -139,6 +142,9 @@ CREDENTIAL_ENCRYPTION_KEY="your-32-byte-hex-key"
 
 # Outbound HTTP request timeout for provider calls (seconds)
 PROVIDER_REQUEST_TIMEOUT=30.0
+PROVIDER_CONNECT_TIMEOUT=5.0
+PROVIDER_MAX_CONNECTIONS=200
+PROVIDER_MAX_KEEPALIVE_CONNECTIONS=50
 
 # Development-only authentication boundary (MUST be false in production)
 ENABLE_DEV_AUTH=true
@@ -813,7 +819,37 @@ Adding a new provider does not require modifying existing adapters:
 
 ---
 
-## 13. Running Tests & Verification
+## 13. Production Deployment
+
+Use `.env` only as a local secret source; do not commit it. Production must provide
+unique values for `JWT_SECRET_KEY`, `VIRTUAL_KEY_HMAC_SECRET`, and
+`CREDENTIAL_ENCRYPTION_KEY`, plus a managed PostgreSQL and Redis URL. Set
+`APP_ENV=production`, `DEBUG=false`, `ENABLE_DEV_AUTH=false`,
+`AUTH_COOKIE_SECURE=true`, `RATE_LIMIT_REDIS_REQUIRED=true`, and configure
+`CORS_ORIGINS` with only the HTTPS frontend origin.
+
+For Azure App Service or Azure Container Apps, configure these values as
+application settings/secrets (prefer Azure Key Vault references) rather than
+uploading `.env`:
+
+```bash
+APP_ENV=production
+DEBUG=false
+ENABLE_DEV_AUTH=false
+AUTH_COOKIE_SECURE=true
+RATE_LIMIT_REDIS_REQUIRED=true
+REDIS_URL=<managed Azure Redis URL>
+DATABASE_URL=<managed PostgreSQL URL>
+CORS_ORIGINS=["https://<your-vercel-domain>"]
+```
+
+Run database migrations before directing traffic to a new deployment. Verify
+`/health/live` and `/health/ready`, configure backups and monitoring, and set
+the Azure health probe to `/api/v1/health/ready` (or the configured
+`API_V1_PREFIX` plus `/health/ready`). Keep the development
+`docker-compose.yml` out of the Azure deployment path.
+
+## 14. Running Tests & Verification
 
 ### Complete Automated Pytest Suite
 Run the 74 automated tests with full mocks:
